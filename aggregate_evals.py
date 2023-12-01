@@ -190,7 +190,29 @@ def aggregate_pythia(path, save_dir):
 
                 else:
                     checkpoint = None
-
+                model_size_int = to_int(model_size)
+                if "pythia" in model_type:
+                    tokens_per_training_batch = 2097152
+                elif model_type == "bloom":
+                    if model_size_int < 1.5e9:
+                        tokens_per_training_batch = 256 * 1024
+                    elif model_size_int < 1e10:
+                        tokens_per_training_batch = 512 * 2048
+                    else:
+                        tokens_per_training_batch = 2048 * 2048
+                elif model_type == "opt":
+                    if model_size_int < 1e9:
+                        tokens_per_training_batch = 5e5
+                    elif model_size_int < 6e9:
+                        tokens_per_training_batch = 1e6
+                    elif model_size_int < 10e9:
+                        tokens_per_training_batch = 2e6
+                    elif model_size_int < 60e9:
+                        tokens_per_training_batch = 4e6
+                    else:
+                        tokens_per_training_batch = 2e6
+                else:
+                    raise ValueError("unexpected model")
                 loss_columns = list(res.keys())
                 assert to_int(model_size), f"{model_size}, is not a number"
                 assert normalize_pythia_model_name(model_type, model_size, data, num_shots) == model_name
@@ -198,7 +220,7 @@ def aggregate_pythia(path, save_dir):
 
                 rows.append(
                     [model_name, steps, model_size, model_type, test_subtype, test_type, checkpoint, loss_columns,
-                     data])
+                     data, tokens_per_training_batch])
 
                 config_cols |= config.keys()
                 res_cols |= res.keys()
@@ -210,7 +232,7 @@ def aggregate_pythia(path, save_dir):
         row += [res.get(res_col) for res_col in res_cols]
     df = pd.DataFrame(data=rows,
                       columns=["model_name", "steps", "num_params", "model_type", "test_subtype", "test_type",
-                               "checkpoint", "loss_cols", "data"] +
+                               "checkpoint", "loss_cols", "data", "tokens_per_training_batch"] +
                               list(config_cols) + list(res_cols))
     os.makedirs(save_dir, exist_ok=True)
     df.to_csv(os.path.join(save_dir, "pythia.csv"), index=False)
