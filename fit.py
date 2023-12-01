@@ -140,6 +140,10 @@ def fit(target_func, metadata, perf, guess=None, bounds=None):
     return popt
 
 
+def aggregate_row_loss(row):
+    return np.mean([row[x] for x in row["loss_cols"]])
+
+
 def fit_per_model(df, predict_with=0.3):
     target_func = datablations_fit
     data = []
@@ -154,8 +158,9 @@ def fit_per_model(df, predict_with=0.3):
         bounds = ([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * len(guess))
         subdf = df[df["model_name"] == model_name]
         subdf = subdf.sort_values("tokens_seen")
+        subdf["perf"] = subdf.apply(aggregate_row_loss, axis=1)
         metadata = subdf.iloc[:int(len(subdf) * predict_with), :]
-        perf = metadata["loss"]
+        perf = metadata["perf"]
         if model_name in cache:
             popt = cache[model_name]
         else:
@@ -168,7 +173,6 @@ def fit_per_model(df, predict_with=0.3):
         subdf = pd.merge(metadata, subdf, how='right', indicator="in_fit")
         subdf["in_fit"] = subdf["in_fit"].apply(lambda x: True if x == "both" else False)
         subdf["pred"] = predicted
-        subdf["perf"] = subdf["loss"]
         data.append(subdf)
     save_cache(cache, cache_name)
     data = pd.concat(data)
@@ -267,7 +271,8 @@ def data_aware_fit(show=False):
 if __name__ == '__main__':
     df = get_data()
     # df = df[df["model_type"].isin(["OPT"])]
-    df = df[(df["model_type"].isin(["GPT2"])) & (df["code"].isna())]
+    # df = df[(df["model_type"].isin(["GPT2"])) & (df["code"].isna())]
+    df = df[df["original_paper"] == "pythia"]
     df = df[df["domain"] == "LM"]
     fit_per_model(df)
     # data_aware_fit()

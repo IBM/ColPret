@@ -1,8 +1,14 @@
+import ast
+
 import pandas as pd
 from functools import reduce
+
+from pandas.core.dtypes.common import is_numeric_dtype
+
 from util.naming import to_int, to_str
 
-BASIC_DF_COLS = ["model_name", "model_type", "tokens_seen", "flops", "num_params", "data", "checkpoint", "loss_cols"]
+BASIC_DF_COLS = ["model_name", "model_type", "tokens_seen", "flops", "num_params", "data", "checkpoint", "loss_cols",
+                 "original_paper"]
 DATA_AWARE_DF_COLS = BASIC_DF_COLS + ["epochs"]
 ARCH_AWARE_DF_COLS = BASIC_DF_COLS + ["arch"]
 ARCHS = ["dec", "enc", "enc-dec"]
@@ -14,6 +20,8 @@ def test_df(df, relevant_cols):
                relevant_cols), f"Missing columns: {[col for col in relevant_cols if col not in df.columns]}"
     loss_cols = set(col for cols in df["loss_cols"] for col in cols)
     missing_cols = [col for col in loss_cols if col not in df.columns]
+    assert is_numeric_dtype(df["num_params"])
+    assert not df["tokens_seen"].isnull().sum() > 0
     assert not missing_cols, f"Loss column are stated in 'loss_col' but do not exist:{missing_cols}"
 
 
@@ -153,31 +161,44 @@ def get_data() -> pd.DataFrame:
 
     # add downstream evals on the 262M model
     tasks = df[downstream_indx]["Task"].unique()
-    dfs = [df[df["Task"] == task] for task in df[downstream_indx]["Task"].unique()]
-    dfs_changed = [d.rename(columns={'loss': d["Task"].iloc[0]}).drop("Task", axis=1) for d in dfs]
+    downstream_dfs = [df[df["Task"] == task] for task in df[downstream_indx]["Task"].unique()]
+    dfs_changed = [d.rename(columns={'loss': d["Task"].iloc[0]}).drop("Task", axis=1) for d in downstream_dfs]
     df = reduce(lambda left, right: pd.merge(left, right, how='outer'), dfs_changed)
     df["domain"] = "LM"
     df["loss_cols"] = [tasks] * len(df)
     df["checkpoint"] = None
+    df["model_type"] = "LAMDA"
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
+    def tokens_per_pythia_data(row):
+        if row.data == "pile":
+            return "334B"
+        elif row.data == 'pile-deduped':
+            return "207B"
+        raise ValueError(f"Unexpected data type in pythia's csv:{row.data}")
+
     df = pd.read_csv("aggregated_eval/pythia.csv")
-    df = df.rename(columns={"model_size": "num_params", "ppl": "loss"})
-    df["arch"] = df.apply(row_to_tokens_seen, axis=1)
-    df["data"] = df["num_params"].apply(to_int)
-    df["epochs"] = df["model_name"]
-    df["flops"] = {}
-    df["data"] = "OPT(ROBERTA_PILE_REDDIT)"
-    df["loss_cols"] = 180e9
-    df["model_name"] = df["tokens_seen"] / 180e9
-    df["num_params"] = df.apply(lambda x: f"OPT-{to_str(x['num_params'])}", axis=1)
-    df["tokens_seen"] = ""
-    df["checkpoint"] =""
+    df = df.drop(columns=["no_cache", "bootstrap_iters", "device", "limit", "description_dict",
+                          "batch_size"])  # the original batch size is a leftover from the evaluation not training use the manually extracted tokens_per_training_batch
+    df["tokens_per_epoch"] = df.apply(tokens_per_pythia_data, axis=1)
+    df["tokens_per_epoch"] = df["tokens_per_epoch"].apply(to_int)
+    df["tokens_seen"] = df["tokens_per_training_batch"] * df["steps"]
+    df["tokens_seen"] = df.apply(lambda x: to_int("341B") if "bloom" in x["model_name"] else x["tokens_seen"], axis=1)
+    df["tokens_seen"] = df.apply(lambda x: to_int("300B") if "opt" in x["model_name"] else x["tokens_seen"], axis=1)
+    df["epochs"] = df["tokens_seen"] / df["tokens_per_epoch"]
+    df["flops"] = df["tokens_seen"] * 6 * df["num_params"].apply(to_int)
+    df["arch"] = "dec"
+    df["loss_cols"] = df["loss_cols"].apply(ast.literal_eval)
+    df["original_paper"] = "pythia"
     df["domain"] = "LM"
+    df["num_params"] = df["num_params"].apply(to_int)
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
-    return pd.concat(dfs)
+
+    res = pd.concat(dfs)
+    res["loss_cols"] = res["loss_cols"].apply(tuple)
+    return res
 
 # datablations (https://arxiv.org/pdf/2305.16264.pdf) through google drive files now in datablations dir.
 # OPT evals found in pythia, loss extracted from training_trajectory_analysis and checkpoints found here (not HF friendly) https://github.com/facebookresearch/metaseq/tree/main/projects/OPT
