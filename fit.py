@@ -159,7 +159,7 @@ def fit_per_model(df, predict_with=0.3):
         subdf = df[df["model_name"] == model_name]
         subdf = subdf.sort_values("tokens_seen")
         subdf["perf"] = subdf.apply(aggregate_row_loss, axis=1)
-        metadata = subdf.iloc[:int(len(subdf) * predict_with), :]
+        metadata = subdf.iloc[:int(len(subdf["perf"]) * predict_with), :]
         perf = metadata["perf"]
         if model_name in cache:
             popt = cache[model_name]
@@ -272,7 +272,7 @@ if __name__ == '__main__':
     df = get_data()
     # df = df[df["model_type"].isin(["OPT"])]
     # df = df[(df["model_type"].isin(["GPT2"])) & (df["code"].isna())]
-    df = df[df["original_paper"] == "pythia"]
-    df = df[df["domain"] == "LM"]
+    # df = df[df["original_paper"] == "pythia"]
+    # df = df[df["domain"] == "LM"]
     fit_per_model(df)
     # data_aware_fit()

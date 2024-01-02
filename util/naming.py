@@ -1,5 +1,7 @@
 import re
 
+import pandas as pd
+
 
 def to_str(num):
     try:
@@ -37,16 +39,22 @@ extract_letter = re.compile(extract_letter)
 
 
 def to_int(string):
+    if pd.isna(string):
+        return string
     try:
-        return int(string)
+        try:
+            return int(float(string))
+        except:
+            string = string.strip()
+            # letter = string[-1]
+            match = re.match(extract_letter, string)
+            letter = match.group(2)
+            number = match.group(1)
+            if match.group(3):
+                number += "." + match.group(3)
+            scale = letter_to_scale(letter)
+            num = float(number) * scale
+            return num
     except:
-        string = string.strip()
-        # letter = string[-1]
-        match = re.match(extract_letter, string)
-        letter = match.group(2)
-        number = match.group(1)
-        if match.group(3):
-            number += "." + match.group(3)
-        scale = letter_to_scale(letter)
-        num = float(number) * scale
-        return num
+        print(f"Could not convert '{string}' to int")
+        raise

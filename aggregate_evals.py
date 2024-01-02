@@ -1,9 +1,14 @@
+import math
 import os
 import json
+from functools import reduce
+
+import numpy as np
 import pandas as pd
 import re
 
 from util.naming import to_int
+from util.read_data import hf_checkpoint
 
 steps_reg = re.compile(r"[-_/\\]?steps?[_-]?(\d+)")
 
@@ -181,15 +186,17 @@ def aggregate_pythia(path, save_dir):
                            for key, dataset_res in eval_res["results"].items()
                            for subkey, val in dataset_res.items()}
                 if "pythia" in model_name:
-                    if "1.3b" in model_name.lower():
-                        checkpoint = None
-                    elif "350m" in model_name.lower():
-                        checkpoint = None
+                    if "1.3b" in model_name.lower():  # older models, with the old name
+                        checkpoint = np.nan
+                    elif "350m" in model_name.lower():  # older models, with the old name
+                        checkpoint = np.nan
+                    elif steps in [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1000] or steps % 1000 == 0:
+                        checkpoint = hf_checkpoint(f"EleutherAI/{model_name.split('_')[0]}", steps)
                     else:
-                        checkpoint = f"EleutherAI/{model_name.split('_')[0]}"
+                        checkpoint = np.nan
 
                 else:
-                    checkpoint = None
+                    checkpoint = np.nan
                 model_size_int = to_int(model_size)
                 if "pythia" in model_type:
                     tokens_per_training_batch = 2097152
@@ -213,7 +220,7 @@ def aggregate_pythia(path, save_dir):
                         tokens_per_training_batch = 2e6
                 else:
                     raise ValueError("unexpected model")
-                loss_columns = list(res.keys())
+                loss_columns = [x for x in res.keys() if "std" not in x]
                 assert to_int(model_size), f"{model_size}, is not a number"
                 assert normalize_pythia_model_name(model_type, model_size, data, num_shots) == model_name
                 assert normalize_pythia_model_type(model_type) == model_type
@@ -238,5 +245,69 @@ def aggregate_pythia(path, save_dir):
     df.to_csv(os.path.join(save_dir, "pythia.csv"), index=False)
 
 
+def aggregate_lm360(save_dir):
+    # read from HF
+    #     import urllib.request
+    # for checkpoint in checkpoints:
+    #     for filename in filenames:
+    #         path = os.path.join(save_dir, "lm360", filename)
+    #         urllib.request.urlretrieve(f"https://huggingface.co/LLM360/Amber/raw/{checkpoint}/{filename}",path)
+    #         with open(path) as js:
+    #             js = json.load(js)
+    # checkpoint = int(checkpoint.split("_")[-1])
+    # checkpoints = ["ckpt_{i:03d}" for i in range(358)] + ["main"]
+    # filenames = ["eval_arc.json", ]
+    # BASIC_DF_COLS = ["model_name", "model_type", "tokens_seen", "flops", "num_params", "data", "checkpoint",
+    #                  "loss_cols",
+    #                  "original_paper"]
+    # DATA_AWARE_DF_COLS = BASIC_DF_COLS + ["epochs"]
+    # ARCH_AWARE_DF_COLS = BASIC_DF_COLS + ["arch"]
+    # ARCHS = ["dec", "enc", "enc-dec"]
+    # rows = ["model_name", "steps", "num_params", "model_type", "test_subtype", "test_type",
+    #         "checkpoint", "loss_cols", "data", "tokens_per_training_batch"] + list(config_cols) + list(res_cols)
+    loss_cols = []
+    for root, _, filenames in os.walk(
+            os.path.join("raw_data", "raw_data/lm360")):  # downloaded manually from https://wandb.ai/llm360/projects
+        dirname = root.split(os.sep)[-1]
+        model_name = dirname
+        num_params = "6.7B"
+        data = f"LLM360/{model_name}Datasets"
+        eval_dfs = []
+        for filename in filenames:
+            if filename.startswith("."):
+                continue
+            eval_df = pd.read_csv(os.path.join(root, filename))
+            if "train - loss" in eval_df.columns:
+                # mapping = dict(zip(np.linspace(0, len(eval_df) - 1,len(eval_df) - 1),np.linspace(0,354,2))
+                checkpoint_steps = math.floor((len(eval_df) - 1) / 356)
+                checkpoints = [x / checkpoint_steps for x in range(len(eval_df))]
+                checkpoints[-1] = 356  # becase of the rounding the loss steps do not exactly match
+                eval_df["checkpoint"] = checkpoints
+                eval_dfs.insert(0, eval_df)
+            else:
+                eval_df["checkpoint"] = eval_df["Step"]
+                eval_df = eval_df.drop(columns=["Step"])
+                eval_dfs.append(eval_df)
+        if not eval_dfs:
+            continue
+        model_df = reduce(lambda left, right: pd.merge(left, right, on=["checkpoint"],
+                                                       how="outer"), eval_dfs)
+        model_df = model_df.reset_index()
+        # model_df["steps"] = np.arrange(len(model_df)) * 2240
+        model_df["tokens_seen"] = np.arange(len(model_df)) * to_int("1.25T") / (len(model_df) - 1)
+        model_df["flops"] = model_df["tokens_seen"] * 6 * to_int(num_params)
+        model_df["checkpoint"] = model_df["checkpoint"].apply(
+            lambda i: hf_checkpoint(f"LLM360/{model_name}", f"ckpt_{i}") if i == int(
+                i) else np.nan)
+        model_df["model_type"] = "Lamma"
+        model_df["arch"] = "dec"
+        model_df["data"] = data
+        model_df["model_name"] = model_name
+        model_df["num_params"] = num_params
+        os.makedirs(save_dir, exist_ok=True)
+        model_df.to_csv(os.path.join(save_dir, f"{model_name}.csv"), index=False)
+
+
 if __name__ == '__main__':
     aggregate_pythia("pythiarch/evals", save_dir="aggregated_eval")
+    aggregate_lm360(save_dir="aggregated_eval")
