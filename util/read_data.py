@@ -193,6 +193,7 @@ def get_data() -> pd.DataFrame:
     df["tokens_per_epoch"] = df.apply(tokens_per_pythia_data, axis=1)
     df["tokens_per_epoch"] = df["tokens_per_epoch"].apply(to_int)
     df["tokens_seen"] = df["tokens_per_training_batch"] * df["steps"]
+    df.drop(columns=["tokens_per_training_batch"])
     df["tokens_seen"] = df.apply(lambda x: to_int("341B") if "bloom" in x["model_name"] else x["tokens_seen"], axis=1)
     df["tokens_seen"] = df.apply(lambda x: to_int("300B") if "opt" in x["model_name"] else x["tokens_seen"], axis=1)
     df["epochs"] = df["tokens_seen"] / df["tokens_per_epoch"]
@@ -260,7 +261,7 @@ def get_data() -> pd.DataFrame:
     df["num_params"] = to_int("2.4B")
     df["model_type"] = "pythia"
     df['arch'] = "dec"
-    df['flops'] = df["tokens_seen"] * 6 * df["num_params"].apply(to_int)
+    df['flops'] = df["tokens_seen"] * 6 * df["num_params"].apply(to_int).apply(float)
     df['checkpoint'] = np.nan
     df['epochs'] = 1
     df['original_paper'] = "https://www.together.ai/blog/redpajama-7b"
@@ -275,7 +276,7 @@ def get_data() -> pd.DataFrame:
     df["num_params"] = to_int("6.7B")
     df["model_type"] = "pythia"
     df['arch'] = "dec"
-    df['flops'] = df["tokens_seen"] * 6 * df["num_params"].apply(to_int)
+    df['flops'] = df["tokens_seen"] * 6 * df["num_params"].apply(to_int).apply(float)
     available_checkpoints = [240, 280, 400, 440, 500, 600, 700, 720, 920]
     check_strings = [hf_checkpoint("togethercomputer/RedPajama-INCITE-7B-Base", f"{num}b_tokens") for num in
                      available_checkpoints]

@@ -6,9 +6,9 @@ def get_cache_path(cache_name):
     return os.path.join("cache", cache_name + ".json")
 
 
-def get_cache(cache_name):
+def get_cache(cache_name, force=False):
     cache_path = get_cache_path(cache_name)
-    if not os.path.isfile(cache_path):
+    if force or not os.path.isfile(cache_path):
         return {}
     with open(cache_path) as fl:
         return json.load(fl)
