@@ -1,4 +1,5 @@
 import ast
+import os.path
 
 import numpy as np
 import pandas as pd
@@ -31,15 +32,17 @@ def hf_checkpoint(name, revision):
     return {"pretrained_model_name_or_path": name, "revision": revision}
 
 
-def get_data() -> pd.DataFrame:
+def get_data(save_in=None, force=False) -> pd.DataFrame:
     """
 
     Returns: a Dataframe with performance per model
     columns:
     model_name: str, a unique identifier of the model (human interpretable)
     """
+    if save_in and not force:
+        if os.path.isfile(save_in):
+            return pd.read_csv(save_in)
     dfs = []
-
     df = pd.read_csv("aggregated_eval/datablations_losses.csv", index_col="index")
     df["num_params"] = df["num_params"].apply(to_int)
     df = df.rename(columns={"token_num": "tokens_seen"})
@@ -82,9 +85,9 @@ def get_data() -> pd.DataFrame:
     df = df.rename(columns={"token_num": "tokens_seen", 'epochs': 'code'})
     df["epochs"] = 1
     df["data"] = df.apply(lambda x: f"{x['data']}-{x['code']}%-code-{100 - x['code']}%", axis=1)
-    df["model_name"] = df.apply(lambda x: f"GPT2-{to_str(x['num_params'])}-{x['data']}-{to_str(x['epochs'])}",
+    df["model_name"] = df.apply(lambda x: f"GPT2-{to_str(x['num_params'])}-{x['data']}-{to_str(x['epochs'])}-{to_str(x['Seed'])}",
                                 axis=1)
-    assert len(df["model_name"].unique()) == len(set((x for x in df["model_args"])))
+    assert len(df["model_name"].unique()) == len(set((x for x in df["model_args"]))) * 2
     df["original_paper"] = "datablations"
     df["model_type"] = "GPT2"
     df["domain"] = "LM"
@@ -294,6 +297,10 @@ def get_data() -> pd.DataFrame:
     df['original_paper'] = "https://www.together.ai/blog/redpajama-7b"
     res = pd.concat(dfs)
     res["loss_cols"] = res["loss_cols"].apply(tuple)
+    res = res.sort_values(["model_type", "model_name", "tokens_seen"])
+
+    if save_in:
+        res.to_csv(save_in, index=False)
     return res
 
 # datablations (https://arxiv.org/pdf/2305.16264.pdf) through google drive files now in datablations dir.
