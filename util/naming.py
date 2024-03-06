@@ -38,7 +38,7 @@ extract_letter = "([\.\d]+)([a-zA-Z])(\d*)"
 extract_letter = re.compile(extract_letter)
 
 
-def to_int(string):
+def to_int(string, graceful=False, verbose=True):
     if pd.isna(string):
         return string
     try:
@@ -56,5 +56,9 @@ def to_int(string):
             num = float(number) * scale
             return num
     except:
-        print(f"Could not convert '{string}' to int")
-        raise
+        if verbose:
+            print(f"Could not convert '{string}' to int")
+        if graceful:
+            return None
+        else:
+            raise
