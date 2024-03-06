@@ -9,14 +9,15 @@ from pandas.core.dtypes.common import is_numeric_dtype
 
 from util.naming import to_int, to_str
 
-BASIC_DF_COLS = ["model_name", "model_type", "tokens_seen", "flops", "num_params", "data", "checkpoint", "loss_cols",
+BASIC_DF_COLS = ["model_name", "model_type", "scaled_set", "tokens_seen", "flops", "num_params", "data", "checkpoint",
+                 "loss_cols",
                  "original_paper"]
 DATA_AWARE_DF_COLS = BASIC_DF_COLS + ["epochs"]
 ARCH_AWARE_DF_COLS = BASIC_DF_COLS + ["arch"]
-ARCHS = ["dec", "enc", "enc-dec", np.nan]
+ARCHS = ["dec", "enc", "enc-dec", "moe", np.nan]
 
 
-def test_df(df, relevant_cols):
+def test_df(df, relevant_cols, supress_zero_tokens=False):
     relevant_cols = set(relevant_cols)
     assert all(col in df.columns for col in
                relevant_cols), f"Missing columns: {[col for col in relevant_cols if col not in df.columns]}"
@@ -24,8 +25,15 @@ def test_df(df, relevant_cols):
     missing_cols = [col for col in loss_cols if col not in df.columns]
     assert is_numeric_dtype(df["num_params"])
     assert not df["tokens_seen"].isnull().sum() > 0
+    assert all(df["tokens_seen"] > 0), "tokens seen must be non-negative"
+    assert supress_zero_tokens or all(df[
+                                          "tokens_seen"] != 0), "values reported without tokens_seen, " \
+                                                                "if that is on purpose (randomly initialized score)," \
+                                                                " pass supress_zero_tokens=True, otherwise check data"
     assert not missing_cols, f"Loss column are stated in 'loss_col' but do not exist:{missing_cols}"
     assert not set(df["arch"].unique()) - set(ARCHS), f"unexpexted arch types:{set(df['arch'].unique()) - set(ARCHS)}"
+    if "GPT2-14m100m100m" in df["model_name"]:
+        raise ("Why multiple models with the same training etc. but different losses? Seeds?")
 
 
 def hf_checkpoint(name, revision):
@@ -48,6 +56,8 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df = df.rename(columns={"token_num": "tokens_seen"})
     df["model_name"] = df.apply(lambda x: f"GPT2-{to_str(x['num_params'])}-{x['data']}-{to_str(x['epochs'])}",
                                 axis=1)
+    df["scaled_set"] = df.apply(lambda x: f"GPT2-{x['data']}-{to_str(x['epochs'])}",
+                                axis=1)
     assert len(df["model_name"].unique()) == len(set((x for x in df["model_args"])))
     df["original_paper"] = "datablations"
     df["model_type"] = "GPT2"
@@ -55,12 +65,14 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["arch"] = "dec"
     df["checkpoint"] = df["checkpoint"]  # note, more checkpoints exist for seeds of the 2B models
     df["loss_cols"] = [("loss",)] * len(df)
+
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
     df = pd.read_csv("aggregated_eval/datablations_contour_losses.csv", index_col="index")
     df["num_params"] = df["num_params"].apply(to_int)
     df = df.rename(columns={"token_num": "tokens_seen"})
+    df["scaled_set"] = np.nan
 
     def parse_name(row):
         name = row["model_args"]
@@ -83,10 +95,12 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["num_params"] = df["num_params"].apply(to_int)
     df["tokens_per_epoch"] = df["tokens_per_epoch"].apply(to_int)
     df = df.rename(columns={"token_num": "tokens_seen", 'epochs': 'code'})
+    df["scaled_set"] = np.nan
     df["epochs"] = 1
     df["data"] = df.apply(lambda x: f"{x['data']}-{x['code']}%-code-{100 - x['code']}%", axis=1)
-    df["model_name"] = df.apply(lambda x: f"GPT2-{to_str(x['num_params'])}-{x['data']}-{to_str(x['epochs'])}-{to_str(x['Seed'])}",
-                                axis=1)
+    df["model_name"] = df.apply(
+        lambda x: f"GPT2-{to_str(x['num_params'])}-{x['data']}-{to_str(x['epochs'])}-{to_str(x['Seed'])}",
+        axis=1)
     assert len(df["model_name"].unique()) == len(set((x for x in df["model_args"]))) * 2
     df["original_paper"] = "datablations"
     df["model_type"] = "GPT2"
@@ -130,6 +144,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["checkpoint"] = "https://github.com/facebookresearch/metaseq/tree/main/projects/OPT"
     df["domain"] = "LM"
     df["loss_cols"] = [("loss",)] * len(df)
+    df["scaled_set"] = "OPT"
 
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
@@ -148,6 +163,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
     df["num_params"] = df["model_type"].apply(to_num)
     df["model_type"] = df["model_type"].apply(lambda x: "lambda" if to_num(x) else x)
+    df["scaled_set"] = df["model_type"].apply(lambda x: "lambda" if to_num(x) else np.nan)
     df["num_params"] = df["num_params"].apply(to_int)
     df["arch"] = df["num_params"].apply(lambda x: "enc-dec" if x else np.nan)
     df["model_args"] = {}
@@ -187,12 +203,21 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
             return "207B"
         raise ValueError(f"Unexpected data type in pythia's csv:{row.data}")
 
-    df = pd.read_csv("aggregated_eval/pythia.csv")
+    df = pd.read_csv("aggregated_eval/pythia.csv", low_memory=False)
 
     std_cols = [col for col in df.columns if col.endswith("stderr")]
     df = df.drop(columns=std_cols)
     df = df.drop(columns=["no_cache", "bootstrap_iters", "device", "limit", "description_dict",
                           "batch_size"])  # the original batch size is a leftover from the evaluation not training use the manually extracted tokens_per_training_batch
+
+    def name_to_scaled_set(name):
+        scaled_set = []
+        for part in name.split("-"):
+            if to_int(part, graceful=True, verbose=False) is None:
+                scaled_set.append(part)
+        return "-".join(scaled_set)
+
+    df["scaled_set"] = df["model_name"].apply(name_to_scaled_set)
     df["tokens_per_epoch"] = df.apply(tokens_per_pythia_data, axis=1)
     df["tokens_per_epoch"] = df["tokens_per_epoch"].apply(to_int)
     df["tokens_seen"] = df["tokens_per_training_batch"] * df["steps"]
@@ -200,12 +225,14 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["tokens_seen"] = df.apply(lambda x: to_int("341B") if "bloom" in x["model_name"] else x["tokens_seen"], axis=1)
     df["tokens_seen"] = df.apply(lambda x: to_int("300B") if "opt" in x["model_name"] else x["tokens_seen"], axis=1)
     df["epochs"] = df["tokens_seen"] / df["tokens_per_epoch"]
-    df["flops"] = df["tokens_seen"] * 6 * df["num_params"].apply(to_int)
+    df["flops"] = None
     df["arch"] = "dec"
     df["loss_cols"] = df["loss_cols"].apply(ast.literal_eval)
     df["original_paper"] = "pythia"
     df["domain"] = "LM"
     df["num_params"] = df["num_params"].apply(to_int)
+    df = df.sort_values(by=["model_name", "steps"], ignore_index=True)
+    df = df[df["tokens_seen"] != 0]
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
@@ -222,6 +249,8 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["original_paper"] = "arxiv.org/abs/2312.06550"
     df["domain"] = "LM"
     df["num_params"] = df["num_params"].apply(to_int)
+    df["scaled_set"] = np.nan
+    df = df[df["tokens_seen"] != 0]
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
@@ -235,7 +264,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
     df["num_params"] = df.apply(lambda row: row["num_params"] if row["num_params"] else row["Params"], axis=1)
     df["model_type"] = "ModuleFormer"
-    df["arch"] = "dec"
+    df["arch"] = "moe"
     df = df[~df["tokens_seen"].isin(["Pile", "IBM Pile"])]
     tokens_df = df
     tokens_df["tokens_seen"] = tokens_df["tokens_seen"].apply(to_int)
@@ -253,6 +282,38 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["num_params"] = df["num_params"].apply(to_int)
     df["flops"] = df["tokens_seen"] * 6 * df["num_params"].apply(
         to_int)  # note that this is the effective number of tokens not the overall ones (so efficient)
+    df["scaled_set"] = np.nan
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
+
+    df = pd.read_csv("aggregated_eval/olmo.csv")
+
+    loss_columns = [col for col in df.columns if "CrossEntropyLoss" in col]  # ignores downstream
+    df["loss_cols"] = df.apply(lambda row: [col for col in loss_columns if pd.notna(row[col])], axis=1)
+    df["data"] = "dolma"
+    df["original_paper"] = "olmo"
+    df["tokens_seen"] = df["Step"] * 4e6
+    df["model_type"] = "olmo"
+    df["scaled_set"] = df.apply(lambda row: np.nan if row["model_name"] == "OLMo-7B-Twin-2T" else "olmo", axis=1)
+    df["epochs"] = 1
+    df["arch"] = "dec"
+    df["num_params"] = df["num_params"].apply(to_int)
+
+    df["flops"] = None
+    # df["num_params"] = df["num_params"].apply(to_int)
+    # df = df.rename(columns={"token_num": "tokens_seen"})
+    # df["model_name"] = df.apply(lambda x: f"GPT2-{to_str(x['num_params'])}-{x['data']}-{to_str(x['epochs'])}",
+    #                             axis=1)
+    # df["scaled_set"] = df.apply(lambda x: f"GPT2-{x['data']}-{to_str(x['epochs'])}",
+    #                             axis=1)
+    # assert len(df["model_name"].unique()) == len(set((x for x in df["model_args"])))
+    # df["original_paper"] = "datablations"
+    # df["model_type"] = "GPT2"
+    # df["domain"] = "LM"
+    # df["arch"] = "dec"
+    # df["checkpoint"] = df["checkpoint"]  # note, more checkpoints exist for seeds of the 2B models
+    # df["loss_cols"] = [("loss",)] * len(df)
+
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
@@ -264,10 +325,11 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["num_params"] = to_int("2.4B")
     df["model_type"] = "pythia"
     df['arch'] = "dec"
-    df['flops'] = df["tokens_seen"] * 6 * df["num_params"].apply(to_int).apply(float)
+    df['flops'] = np.nan
     df['checkpoint'] = np.nan
     df['epochs'] = 1
-    df['original_paper'] = "https://www.together.ai/blog/redpajama-7b"
+    df['original_paper'] = "blog-redpajama-7b"
+    df["scaled_set"] = "redPajama"
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
@@ -277,9 +339,10 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["data"] = "redPajama"
     df["model_name"] = "redPajama6.7"
     df["num_params"] = to_int("6.7B")
+    df["scaled_set"] = "redPajama"
     df["model_type"] = "pythia"
     df['arch'] = "dec"
-    df['flops'] = df["tokens_seen"] * 6 * df["num_params"].apply(to_int).apply(float)
+    df['flops'] = np.nan
     available_checkpoints = [240, 280, 400, 440, 500, 600, 700, 720, 920]
     check_strings = [hf_checkpoint("togethercomputer/RedPajama-INCITE-7B-Base", f"{num}b_tokens") for num in
                      available_checkpoints]
@@ -294,26 +357,33 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
             checkpoints.append(np.nan)
     df['checkpoint'] = checkpoints
     df['epochs'] = 1
-    df['original_paper'] = "https://www.together.ai/blog/redpajama-7b"
+    df['original_paper'] = "blog-redpajama-7b"
     res = pd.concat(dfs)
     res["loss_cols"] = res["loss_cols"].apply(tuple)
     res = res.sort_values(["model_type", "model_name", "tokens_seen"])
 
+    res["flops"] = res.apply(
+        lambda row: row["tokens_seen"] * 6 * to_int(row["num_params"]) if pd.isna(row["flops"]) else
+        row["flops"], axis=1)
     if save_in:
         res.to_csv(save_in, index=False)
     return res
 
+# OLMO (https://arxiv.org/pdf/2402.00838.pdf) data from https://wandb.ai/ai2-llm/OLMo-7B/reports/OLMo-7B-Twin-2T--Vmlldzo2NzU0NTIz
 # datablations (https://arxiv.org/pdf/2305.16264.pdf) through google drive files now in datablations dir.
 # OPT evals found in pythia, loss extracted from training_trajectory_analysis and checkpoints found here (not HF friendly) https://github.com/facebookresearch/metaseq/tree/main/projects/OPT
 ## OPT loss extracted from training_trajectory_analysis paper https://arxiv.org/pdf/2212.09803.pdf
 # revisiting_neural_scaling_laws (lambda and vision) https://github.com/google-research/google-research/tree/master/revisiting_neural_scaling_laws/data paper https://arxiv.org/abs/2209.06640
 # LM360 Amber (the other one had too many phases) https://www.llm360.ai/
-# TODO
 # Red Pajamas blog:https://www.together.ai/blog/redpajama-models-v1  model checkpoints here(other sizes elsewhere): https://huggingface.co/togethercomputer/RedPajama-INCITE-7B-Base
+# ModuleFormer MOE (https://arxiv.org/abs/2306.04640) (LLMs -0shot.csv) from https://docs.google.com/spreadsheets/d/1b_Em7HVESSExXCPvssJT7El5zc43KvysDJFJqVNM5jE/edit?usp=sharing
+# TODO
 # Some granite training data: https://watsonx-data.cash.sl.cloud9.ibm.com/models/detail/5
 # granite logs? https://ibm-research.slack.com/archives/C049F4GK05T/p1702911455907359?thread_ts=1702910609.328829&cid=C049F4GK05T
-# Yikang's MOE (LLMs -0shot.csv) from https://docs.google.com/spreadsheets/d/1b_Em7HVESSExXCPvssJT7El5zc43KvysDJFJqVNM5jE/edit?usp=sharing
 # ConvNets match https://arxiv.org/pdf/2310.16764.pdf
 # ViT scaling laws arxiv.org/abs/2305.13035
 # Stella's list might have more? https://docs.google.com/spreadsheets/d/1gc6yse74XCwBx028HV_cvdxwXkmXejVjkO-Mz2uwE0k/edit#gid=0
 # hyperparameters for some of the models if useful https://docs.google.com/spreadsheets/d/14vbBbuRMEHoqeuMHkTfw3uiZVmyXNuoSp8s-aHvfvZk/edit#gid=0
+# multi-modal scaling laws https://openreview.net/pdf?id=2n7dHVhwJf Scaling Laws for Generative Mixed-Modal Language Models
+# Mow scaling law https://arxiv.org/abs/2402.07871
+# black mamba (MOW+mamba arch, might need to change current moe to dec moe or give moe a separate col) https://arxiv.org/abs/2402.01771

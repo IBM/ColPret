@@ -308,6 +308,64 @@ def aggregate_lm360(save_dir):
         model_df.to_csv(os.path.join(save_dir, f"{model_name}.csv"), index=False)
 
 
+def aggregate_olmo(path, save_dir):
+    path = os.path.join("raw_data", path)
+    res_df = {}
+    for root, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            if filename.endswith("csv"):
+                single_eval_df = pd.read_csv(os.path.join(root, filename))
+                drop_columns = [col for col in single_eval_df.columns if col.endswith("MAX") or col.endswith("MIN")]
+                single_eval_df = single_eval_df.drop(columns=drop_columns)
+
+                model_name, test_name = single_eval_df.columns[-1].replace("Group:", "").strip().split("- eval/")
+                if "run" in model_name:
+                    model_name = model_name.split("-run")[0].strip()
+
+                single_eval_df[test_name] = single_eval_df.iloc[:, 1:].sum(axis=1)
+                single_eval_df = single_eval_df.drop(columns=single_eval_df.columns[1:-1])
+
+                single_eval_df["model_name"] = model_name
+
+                single_eval_df["num_params"] = model_name.split("B")[0].split("-")[-1] + "B"
+                # dfs.append(single_eval_df)
+                if model_name not in res_df:
+                    res_df[model_name] = single_eval_df
+                elif test_name in res_df[model_name].columns:
+                    continue  # data downloaded twice by mistake
+                else:
+                    res_df[model_name] = pd.DataFrame.merge(res_df[model_name], single_eval_df,
+                                                            on=["Step", "model_name", "num_params"],
+                                                            how="outer")
+    res_df = pd.concat(res_df.values())
+
+    checkpoints = {}
+    for model in res_df["model_name"].unique():
+        from huggingface_hub import HfApi
+        api = HfApi()
+        refs = api.list_repo_refs("allenai/OLMo-7B")
+        checkpoints[model] = {}
+        for branch in refs.branches:
+            if branch.name == "main":
+                continue
+            step = int(branch.name.replace("step", "").split("-")[0])
+            checkpoints[model][step] = branch.name
+
+    def olmo_checkpoint(row):
+        model_checkpoints = checkpoints[row["model_name"]]
+        if row["Step"] in model_checkpoints:
+            revision = model_checkpoints[row["Step"]]
+            return hf_checkpoint(row["model_name"], revision)
+        else:
+            return np.nan
+
+    res_df["checkpoint"] = res_df.apply(olmo_checkpoint, axis=1)
+
+    os.makedirs(save_dir, exist_ok=True)
+    res_df.to_csv(os.path.join(save_dir, f"olmo.csv"), index=False)
+
+
 if __name__ == '__main__':
+    aggregate_olmo("OLMO", save_dir="aggregated_eval")
     aggregate_pythia("pythiarch/evals", save_dir="aggregated_eval")
     aggregate_lm360(save_dir="aggregated_eval")
