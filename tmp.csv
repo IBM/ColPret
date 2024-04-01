@@ -1,0 +1,130 @@
+warstadt2023findings,Title not found
+charpentier2023not,Not all layers are equally as important: Every Layer Counts BERT
+pagliardini2024denseformer,DenseFormer: Enhancing Information Flow in Transformers via Depth Weighted Averaging
+knots,Tie the KnOTS: Model Merging with SVD
+hild,High-dimensional Learning Dynamics 2024: The Emergence of Structure and Reasoning Workshop at ICML24
+wortsman2022model,Model soups: averaging weights of multiple fine-tuned models improves accuracy without increasing inference time
+shabtay2024livexiv,LiveXiv--A Multi-Modal Live Benchmark Based on Arxiv Papers Content
+choshen2024hitchhiker,A Hitchhiker's Guide to Scaling Law Estimation
+polo2024sloth,Sloth: scaling laws for LLM skills to predict multi-benchmark performance across families
+vaswani2017attention,Attention is all you need
+matena2021merging,Merging models with fisher-weighted averaging
+harari2014sapiens,Sapiens: A brief history of humankind
+hu2024findingssecondbabylmchallenge,Findings of the Second BabyLM Challenge: Sample-Efficient Pretraining on Developmentally Plausible Corpora
+stlm,Super Tiny Language Models
+perlitz2024llm,Do These LLM Benchmarks Agree? Fixing Benchmark Evaluation with BenchBench
+zhang2024unforgettable,Unforgettable Generalization in Language Models
+DBLP:conf/acl/AkyurekACWA24,Deductive Closure Training of Language Models for Coherence, Accuracy, and Updatability
+DBLP:conf/acl/Ashury-TahanGSC24,Label-Efficient Model Selection for Text Generation
+DBLP:conf/coling/DinKCG24,Jump to Conclusions: Short-Cutting Transformers with Linear Transformations
+DBLP:conf/iclr/YehudaiCMAMSC24,Achieving Human Parity in Content-Grounded Datasets Generation
+DBLP:conf/icml/PoloWCSXY24,tinyBenchmarks: evaluating LLMs with fewer examples
+DBLP:conf/icml/ZhuGNBGCGY024,Asymmetry in Low-Rank Adapters of Foundation Models
+DBLP:conf/naacl/PerlitzBGAESSSC24,Efficient Benchmarking (of Language Models)
+DBLP:journals/corr/abs-2401-08574,Deductive Closure Training of Language Models for Coherence, Accuracy, and Updatability
+lmeval,A framework for few-shot language model evaluation
+bandel2024unitxt,Title not found
+DBLP:journals/corr/abs-2401-14367,Genie: Achieving Human Parity in Content-Grounded Datasets Generation
+DBLP:journals/corr/abs-2402-07891,Label-Efficient Model Selection for Text Generation
+DBLP:journals/corr/abs-2402-14992,tinyBenchmarks: evaluating LLMs with fewer examples
+DBLP:journals/corr/abs-2402-16842,Asymmetry in Low-Rank Adapters of Foundation Models
+DBLP:journals/corr/abs-2404-00459,NumeroLogic: Number Encoding for Enhanced LLMs' Numerical Reasoning
+DBLP:journals/corr/abs-2404-06214,[Call for Papers] The 2nd BabyLM Challenge: Sample-efficient pretraining on a developmentally plausible corpus
+DBLP:journals/corr/abs-2404-15198,Lossless and Near-Lossless Compression for Foundation Models
+DBLP:journals/corr/abs-2404-18923,Holmes: Benchmark the Linguistic Competence of Language Models
+DBLP:journals/corr/abs-2405-09605,Elements of World Knowledge {(EWOK):} {A} cognition-inspired framework for evaluating basic world knowledge in language models
+DBLP:journals/corr/abs-2405-17202,Efficient multi-prompt evaluation of LLMs
+DBLP:journals/corr/abs-2407-00066,Compress then Serve: Serving Thousands of LoRA Adapters with Little Overhead
+DBLP:journals/corr/abs-2407-10944,Learning from Naturally Occurring Feedback
+DBLP:journals/corr/abs-2407-13696,Benchmark Agreement Testing Done Right: {A} Guide for {LLM} Benchmark Evaluation
+DBLP:journals/corr/abs-2407-21530,Data Contamination Report from the 2024 {CONDA} Shared Task
+DBLP:conf/acl/Don-YehiyaVRSC23,ColD Fusion: Collaborative Descent for Distributed Multitask Finetuning
+DBLP:conf/acl/NeemanAHCSA23,DisentQA: Disentangling Parametric and Contextual Knowledge with Counterfactual Question Answering
+DBLP:conf/conll/KaridiCPA23,MuLER: Detailed and Scalable Reference-based Evaluation
+cohen2006european,European public acceptance of euthanasia: socio-demographic and cultural factors associated with the acceptance of euthanasia in 33 European countries
+DBLP:conf/emnlp/ChoshenVDSK23,Where to start? Analyzing the potential value of intermediate models
+DBLP:conf/emnlp/Don-YehiyaCA23,Human Learning by Model Feedback: The Dynamics of Iterative Prompting with Midjourney
+DBLP:conf/emnlp/GuetaVRSKC23,Knowledge is a Region in Weight Space for Fine-tuned Language Models
+DBLP:conf/nips/YadavTCRB23,TIES-Merging: Resolving Interference When Merging Models
+DBLP:journals/corr/abs-2301-11796,Call for Papers - The BabyLM Challenge: Sample-efficient pretraining on a developmentally plausible corpus
+DBLP:journals/corr/abs-2302-04863,Knowledge is a Region in Weight Space for Fine-tuned Language Models
+DBLP:journals/corr/abs-2303-09435,Jump to Conclusions: Short-Cutting Transformers With Linear Transformations
+DBLP:journals/corr/abs-2305-14991,MuLER: Detailed and Scalable Reference-based Evaluation
+DBLP:journals/corr/abs-2306-01708,Resolving Interference When Merging Models
+DBLP:journals/corr/abs-2308-11696,Efficient Benchmarking (of Language Models)
+DBLP:journals/corr/abs-2311-07682,Fuse to Forget: Bias Reduction and Selective Memorization through Model Fusion
+DBLP:journals/corr/abs-2311-12131,Human Learning by Model Feedback: The Dynamics of Iterative Prompting with Midjourney
+DBLP:journals/corr/abs-2311-13171,ComPEFT: Compression for Communicating Parameter Efficient Updates via Sparsification and Quantization
+DBLP:conf/acl/ChoshenHWA22,The Grammar-Learning Trajectories of Neural Language Models
+DBLP:conf/acl/ShnarchGHDCAS22,Cluster {\&} Tune: Boost Cold Start Performance in Text Classification
+DBLP:conf/coling/YehudaiCFA22,Reinforcement Learning with Large Action Spaces for Neural Machine Translation
+DBLP:conf/conll/ChoshenA22,Enhancing the Transformer Decoder with Transition-based Syntax
+DBLP:conf/conll/PatelCA22,On Neurons Invariant to Sentence Structural Changes in Neural Machine Translation
+DBLP:conf/emnlp/Don-YehiyaCA22,PreQuEL: Quality Estimation of Machine Translation Outputs in Advance
+DBLP:conf/emnlp/ShnarchHGDKCCEZW22,Label Sleuth: From Unlabeled Text to a Classifier in a Few Hours
+DBLP:conf/lrec/Lertvittayakumjorn22,GrASP: {A} Library for Extracting and Exploring Human-Interpretable Textual Patterns
+DBLP:conf/starsem/SlobodkinCA22,Semantics-aware Attention Improves Neural Machine Translation
+DBLP:journals/corr/abs-2203-10581,Cluster {\&} Tune: Boost Cold Start Performance in Text Classification
+DBLP:journals/corr/abs-2204-03044,Fusing finetuned models for better pretraining
+DBLP:journals/corr/abs-2205-05730,Some Grammatical Errors are Frequent, Others are Important
+DBLP:journals/corr/abs-2205-09178,PreQuEL: Quality Estimation of Machine Translation Outputs in Advance
+DBLP:journals/corr/abs-2208-01483,Label Sleuth: From Unlabeled Text to a Classifier in a Few Hours
+DBLP:journals/corr/abs-2210-03053,Reinforcement Learning with Large Action Spaces for Neural Machine Translation
+bhaskar-etal-2024-heuristic,Title not found
+DBLP:journals/corr/abs-2211-00107,Where to start? Analyzing the potential value of intermediate models
+DBLP:journals/corr/abs-2211-05655,DisentQA: Disentangling Parametric and Contextual Knowledge with Counterfactual Question Answering
+DBLP:journals/corr/abs-2212-01378,ColD Fusion: Collaborative Descent for Distributed Multitask Finetuning
+DBLP:journals/nature/SlonimBABBBCCDE21,An autonomous debating system
+DBLP:conf/emnlp/HonovichCANSA21,{ extdollar}Q2{ extdollar}: Evaluating Factual Consistency in Knowledge-Grounded Dialogues via Question Generation and Question Answering
+DBLP:conf/naacl/SlobodkinCA21,Mediators in Determining what Processing {BERT} Performs First
+DBLP:journals/corr/abs-2101-12640,Transition based Graph Decoder for Neural Machine Translation
+DBLP:journals/corr/abs-2104-02310,{SERRANT:} a syntactic classifier for English Grammatical Error Types
+DBLP:journals/corr/abs-2104-03958,GrASP: {A} Library for Extracting and Exploring Human-Interpretable Textual Patterns
+DBLP:journals/corr/abs-2104-06400,Mediators in Determining what Processing {BERT} Performs First
+choshen2024navigating,Navigating the Modern Evaluation Landscape: Considerations in Benchmarks and Frameworks for Large Language Models (LLMs)
+DBLP:journals/corr/abs-2104-08202,Q\({}^{\mbox{2}}\): Evaluating Factual Consistency in Knowledge-Grounded Dialogues via Question Generation and Question Answering
+DBLP:journals/corr/abs-2106-00745,Part of Speech and Universal Dependency effects on English Arabic Machine Translation
+DBLP:journals/corr/abs-2108-10763,ComSum: Commit Messages Summarization and Meaning Preservation
+DBLP:journals/corr/abs-2109-06096,The Grammar-Learning Trajectories of Neural Language Models
+DBLP:journals/corr/abs-2110-03067,On Neurons Invariant to Sentence Structural Changes in Neural Machine Translation
+DBLP:journals/corr/abs-2110-06920,Semantics-aware Attention Improves Neural Machine Translation
+DBLP:conf/aaai/Ein-DorSDHSGAGC20,Corpus Wide Argument Mining - {A} Working Solution
+DBLP:conf/conll/ChoshenNBA20,Classifying Syntactic Errors in Learner Language
+DBLP:conf/emnlp/Ein-DorHGSDCDAK20,Active Learning for {BERT:} An Empirical Study
+DBLP:conf/emnlp/ShnarchCMAS20,Unsupervised Expressive Rules Provide Explainability and Assist Human Experts Grasping New Domains
+DBLP:conf/iclr/ChoshenFAA20,On the Weaknesses of Reinforcement Learning for Neural Machine Translation
+DBLP:conf/icml/HacohenCW20,Let's Agree to Agree: Neural Networks Share Classification Order on Real Datasets
+DBLP:journals/corr/abs-2010-09459,Unsupervised Expressive Rules Provide Explainability and Assist Human Experts Grasping New Domains
+DBLP:journals/corr/abs-2010-11032,Classifying Syntactic Errors in Learner Language
+gilkerson2017mapping,Mapping the early language environment using all-day recordings and automated analysis
+wilcox2024bigger,Bigger is not always better: The importance of human-scale language modeling for psycholinguistics
+don2024sharelm,The ShareLM Collection and Plugin: Contributing Human-Model Chats for the Benefit of the Community
+fandina2024can,Can You Trust Your Metric? Automatic Concatenation-Based Tests for Metric Validity
+ifergan2024beneath,Beneath the Surface of Consistency: Exploring Cross-lingual Knowledge Representation Sharing in LLMs
+yadav2024survey,A Survey on Model MoErging: Recycling and Routing Among Specialized Experts for Collaborative Learning
+warstadt2024insights,Insights from the first BabyLM Challenge: Training sample-efficient language models on a developmentally plausible corpus
+helm,Holistic evaluation of language models
+dubey2024llama,The llama 3 herd of models
+Choshen2022FusingFM,Fusing finetuned models for better pretraining
+DBLP:conf/acl/ChoshenEHSA19,The Language of Legal and Illegal Activity on the Darknet
+DBLP:conf/acl/GleizeSCDMAS19,Are You Convinced? Choosing the More Convincing Evidence with a Siamese Network
+DBLP:conf/bea/KantorKCCLTMS19,Learning to combine Grammatical Error Corrections
+DBLP:conf/conll/ChoshenA19,Automatically Extracting Challenge Sets for Non-Local Phenomena in Neural Machine Translation
+DonYehiya2024TheFO,The Future of Open Human Feedback
+DBLP:conf/semeval/HershcovichACSR19,SemEval-2019 Task 1: Cross-lingual Semantic Parsing with {UCCA}
+DBLP:journals/corr/abs-1903-02953,SemEval 2019 Task 1: Cross-lingual Semantic Parsing with {UCCA}
+DBLP:journals/corr/abs-1905-05543,The Language of Legal and Illegal Activity on the Darknet
+DBLP:journals/corr/abs-1906-03897,Learning to combine Grammatical Error Corrections
+DBLP:journals/corr/abs-1907-01752,On the Weaknesses of Reinforcement Learning for Neural Machine Translation
+DBLP:journals/corr/abs-1907-08971,Are You Convinced? Choosing the More Convincing Evidence with a Siamese Network
+DBLP:journals/corr/abs-1909-06814,Automatically Extracting Challenge Sets for Non local Phenomena in Neural Machine Translation
+DBLP:journals/corr/abs-1911-10763,Corpus Wide Argument Mining - a Working Solution
+DBLP:conf/acl/AbendC18,Inherent Biases in Reference-based Evaluation for Grammatical Error Correction
+DBLP:conf/acl/AbendC18a,Automatic Metric Validation for Grammatical Error Correction
+DBLP:conf/acl/ShnarchPDGHCAS18,Will it Blend? Blending Weak and Strong Labeled Data in a Neural Network for Argumentation Mining
+DBLP:conf/iclr/FoxCL18,{DORA} The Explorer: Directed Outreaching Reinforcement Action-Selection
+DBLP:conf/naacl/ChoshenA18,Reference-less Measure of Faithfulness for Grammatical Error Correction
+DBLP:journals/corr/abs-1804-03824,Reference-less Measure of Faithfulness for Grammatical Error Correction
+DBLP:journals/corr/abs-1804-04012,{DORA} The Explorer: Directed Outreaching Reinforcement Action-Selection
+DBLP:journals/corr/abs-1804-11225,Automatic Metric Validation for Grammatical Error Correction
+DBLP:journals/corr/abs-1804-11254,Inherent Biases in Reference-based Evaluation for Grammatical Error Correction and Text Simplification
