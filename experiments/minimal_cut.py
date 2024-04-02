@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from util.fit_utils import plot_models_percentage_hist, mean_normalized_distance, fit, get_model_data, get_perf_df, \
-    metric_per_column, mean_squared_error, get_perf_path, get_data_path
+    metric_per_column, mean_squared_error, get_perf_path, get_data_path, single_scaling
 from fitting_funcs import ChinchillaFit, bound_params
 from util.cache import save_cache, get_cache
 from util.read_data import get_data
@@ -46,21 +46,7 @@ def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), 
                     test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
 
-                    if train_df.empty or test_df.empty:
-                        popt = None
-                    else:
-                        popt = fit(fit_info, train_df, train_df["perf"])
-                    if popt is None:
-                        mse = None
-                        mnd = None
-                        train_mnd = None
-                        predicted = None
-                    else:
-                        predicted = fit_info.func(test_df, *popt)
-                        mse = mean_squared_error(predicted, test_df["perf"])
-                        mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
-                        predicted_train = fit_info.func(train_df, *popt)
-                        train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
+                    mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info,abs_mnd=abs_mnd)
                     last_pred = predicted[-1] if predicted is not None else None
                     res = (scaled_set, min_percentage, mse, mnd, last_pred, largest_model, num_train_models + 1,
                            tuple(popt) if popt is not None else None)

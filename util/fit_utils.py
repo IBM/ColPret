@@ -31,6 +31,24 @@ import seaborn as sns
 # a, b, e, alpha, beta, rd_star, rn_star = [6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596, 15.387756, 5.309743]
 epsilon = 1e-6
 
+def single_scaling(train_df, test_df, fit_info, abs_mnd):
+    if train_df.empty or test_df.empty:
+        popt = None
+    else:
+        popt = fit(fit_info, train_df, train_df["perf"])
+    if popt is None:
+        mse = None
+        mnd = None
+        train_mnd = None
+        predicted = None
+    else:
+        predicted = fit_info.func(test_df, *popt)
+        mse = mean_squared_error(predicted, test_df["perf"])
+        mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
+        predicted_train = fit_info.func(train_df, *popt)
+        train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
+    return mse,mnd,train_mnd,predicted, popt
+
 
 def mean_squared_error(pred, gold):
     try:
@@ -239,23 +257,26 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False, loss_types=["
                                           min_tokens=cut_beginning)
                 test_df = get_model_data(df=df, models=[model_name], min_percentage=test_percentage,
                                          min_tokens=cut_beginning)
-                if train_df.empty or test_df.empty:
-                    mse = None
-                    mnd = None
-                    predicted = None
-                else:
-                    popt = fit(fit_info, train_df, train_df["perf"])
-                    if popt is None:
-                        mse = None
-                        mnd = None
-                        predicted = None
-                    else:
-                        predicted = fit_info.func(test_df, *popt)
-                        mse = mean_squared_error(predicted, test_df["perf"])
-                        mnd = (test_df["perf"] - predicted) / test_df["perf"]
-                        if abs_mnd:
-                            mnd = np.abs(mnd)
-                        mnd = mnd.mean()
+                # replaced by single_scaling
+                # if train_df.empty or test_df.empty:
+                #     mse = None
+                #     mnd = None
+                #     predicted = None
+                # else:
+                #     popt = fit(fit_info, train_df, train_df["perf"])
+                #     if popt is None:
+                #         mse = None
+                #         mnd = None
+                #         predicted = None
+                #     else:
+                #         predicted = fit_info.func(test_df, *popt)
+                #         mse = mean_squared_error(predicted, test_df["perf"])
+                #         mnd = (test_df["perf"] - predicted) / test_df["perf"]
+                #         if abs_mnd:
+                #             mnd = np.abs(mnd)
+                #         mnd = mnd.mean()
+                mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_mnd=abs_mnd)
+
                 last_pred = predicted[-1] if predicted is not None else None
                 res = (model_name, percentage, mse, mnd, last_pred)
                 cache[cache_id] = res
@@ -436,21 +457,23 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=["p
                                               min_tokens=cut_beginning)
                     test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
-                    if train_df.empty or test_df.empty:
-                        popt = None
-                    else:
-                        popt = fit(fit_info, train_df, train_df["perf"])
-                    if popt is None:
-                        mse = None
-                        mnd = None
-                        train_mnd = None
-                        predicted = None
-                    else:
-                        predicted = fit_info.func(test_df, *popt)
-                        mse = mean_squared_error(predicted, test_df["perf"])
-                        mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
-                        predicted_train = fit_info.func(train_df, *popt)
-                        train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
+                    # replaced by single_scaling
+                    # if train_df.empty or test_df.empty:
+                    #     popt = None
+                    # else:
+                    #     popt = fit(fit_info, train_df, train_df["perf"])
+                    # if popt is None:
+                    #     mse = None
+                    #     mnd = None
+                    #     train_mnd = None
+                    #     predicted = None
+                    # else:
+                    #     predicted = fit_info.func(test_df, *popt)
+                    #     mse = mean_squared_error(predicted, test_df["perf"])
+                    #     mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
+                    #     predicted_train = fit_info.func(train_df, *popt)
+                    #     train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
+                    mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info,abs_mnd=abs_mnd)
                     last_pred = predicted[-1] if predicted is not None else None
                     res = (scaled_set, percentage, mse, mnd, last_pred, largest_model, num_model + 1, current_model,
                            train_model_size,
@@ -669,35 +692,35 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=["perp"], at_
             plt.clf()
     print("done")
 
-
-def scaling_scaling_law(df, force=False):
-    fit_info = ChinchillaFit
-
-    data = []
-    cache_name = f"scaling_scaling_law"
-    cache = get_cache(cache_name, force)
-    for model_name in df["model_name"].unique():
-
-        subdf = df[df["model_name"] == model_name]
-        subdf = subdf.sort_values("tokens_seen")
-        subdf["perf"] = aggregate_loss(subdf, graceful=True)
-
-        metadata = subdf.iloc[:int(len(subdf["perf"]) * predict_with), :]
-        perf = metadata["perf"]
-        if model_name in cache:
-            popt = cache[model_name]
-        else:
-            popt = fit(fit_info, metadata, perf, default=epsilon)
-            cache[model_name] = [x for x in popt]
-
-        predicted = fit_info.func(subdf, *popt)
-        subdf = pd.merge(metadata, subdf, how='right', indicator="in_fit")
-        subdf["in_fit"] = subdf["in_fit"].apply(lambda x: True if x == "both" else False)
-        subdf["pred"] = predicted
-        data.append(subdf)
-    save_cache(cache, cache_name)
-    data = pd.concat(data)
-    plot_pred_actual_compare(data, show=True)
+#
+# def scaling_scaling_law(df, force=False):
+#     fit_info = ChinchillaFit
+#
+#     data = []
+#     cache_name = f"scaling_scaling_law"
+#     cache = get_cache(cache_name, force)
+#     for model_name in df["model_name"].unique():
+#
+#         subdf = df[df["model_name"] == model_name]
+#         subdf = subdf.sort_values("tokens_seen")
+#         subdf["perf"] = aggregate_loss(subdf, graceful=True)
+#
+#         metadata = subdf.iloc[:int(len(subdf["perf"]) * predict_with), :]
+#         perf = metadata["perf"]
+#         if model_name in cache:
+#             popt = cache[model_name]
+#         else:
+#             popt = fit(fit_info, metadata, perf, default=epsilon)
+#             cache[model_name] = [x for x in popt]
+#
+#         predicted = fit_info.func(subdf, *popt)
+#         subdf = pd.merge(metadata, subdf, how='right', indicator="in_fit")
+#         subdf["in_fit"] = subdf["in_fit"].apply(lambda x: True if x == "both" else False)
+#         subdf["pred"] = predicted
+#         data.append(subdf)
+#     save_cache(cache, cache_name)
+#     data = pd.concat(data)
+#     plot_pred_actual_compare(data, show=True)
 
 
 def data_aware_fit(show=False):
