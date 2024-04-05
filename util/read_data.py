@@ -1,5 +1,6 @@
 import ast
 import os.path
+import re
 
 import numpy as np
 import pandas as pd
@@ -333,6 +334,65 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
+    df = pd.read_csv("raw_data/overtrain/overtrain.csv")
+    df["loss_cols"] = [["train_loss"]] * len(df)
+    df["model_name"] = "overtrain"
+    name_to_params = {
+        "d=96_l=8_h=4": "0.011B",
+        "d=512_l=8_h=4": "0.079B",
+        "d=576_l=24_h=8": "0.154B",
+        "d=1024_l=24_h=8": "0.411B",
+        "open_lm_1b": "1.4B",
+        "open_lm_7b": "6.9B",
+    }
+    data_to_name = {
+        "c4_original": "C4",
+        "pile": "Pile",
+        "rpj": "RedPajama",
+        "rw_original": "RefinedWeb",
+    }
+
+    def data_from_name(name):
+        for key, val in data_to_name.items():
+            if key in name:
+                return val
+        raise ValueError
+
+    def params_from_name(name):
+        for key, val in name_to_params.items():
+            if key in name:
+                return val
+        raise ValueError
+
+    def loss_to_rows(loss_str):
+        lines = loss_str.split("\n")
+        tokens = []
+        losses = []
+        for line in lines:
+            if not line[0].isnumeric():
+                continue
+            token, loss = re.split("\s+", line)
+            tokens.append(token)
+            losses.append(loss)
+        return list(zip(tokens, losses))
+
+    df["tmp"] = df["loss"].apply(loss_to_rows)
+    df = df.explode("tmp", ignore_index=True)
+    df[["token", "loss"]] = df["tmp"].tolist()
+    df["num_params"] = df["name"].apply(params_from_name)
+    df["data"] = df["name"].apply(data_from_name)
+    df["model_type"] = "overtrain"
+    df['arch'] = "dec"
+    df['flops'] = np.nan
+    df['checkpoint'] = np.nan
+    df['epochs'] = 1
+    df['original_paper'] = "overtrain"
+    df["scaled_set"] = "overtrain"
+    df["tokens_seen"] = df["tokens_seen"].apply(lambda x: int(x * 1e9))
+
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
+
     df = pd.read_csv("raw_data/redPajama/6.7B.csv", names=["tokens_seen", "train_loss"])
     df["tokens_seen"] = df["tokens_seen"].apply(lambda x: int(x * 1e9))
     df["loss_cols"] = [["train_loss"]] * len(df)
@@ -369,6 +429,10 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
         res.to_csv(save_in, index=False)
     return res
 
+
+if __name__ == '__main__':
+    data = get_data(save_in=None)
+
 # OLMO (https://arxiv.org/pdf/2402.00838.pdf) data from https://wandb.ai/ai2-llm/OLMo-7B/reports/OLMo-7B-Twin-2T--Vmlldzo2NzU0NTIz
 # datablations (https://arxiv.org/pdf/2305.16264.pdf) through google drive files now in datablations dir.
 # OPT evals found in pythia, loss extracted from training_trajectory_analysis and checkpoints found here (not HF friendly) https://github.com/facebookresearch/metaseq/tree/main/projects/OPT
@@ -378,6 +442,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 # Red Pajamas blog:https://www.together.ai/blog/redpajama-models-v1  model checkpoints here(other sizes elsewhere): https://huggingface.co/togethercomputer/RedPajama-INCITE-7B-Base
 # ModuleFormer MOE (https://arxiv.org/abs/2306.04640) (LLMs -0shot.csv) from https://docs.google.com/spreadsheets/d/1b_Em7HVESSExXCPvssJT7El5zc43KvysDJFJqVNM5jE/edit?usp=sharing
 # TODO
+# overtrain: Language models scale reliably with over-training and on downstream tasks https://arxiv.org/abs/2403.08540 https://github.com/mlfoundations/scaling/blob/a003c4913793ac2ae7ef87b28ecb562955d026d5/scaling/constants.py#L139-L146
 # Some granite training data: https://watsonx-data.cash.sl.cloud9.ibm.com/models/detail/5
 # granite logs? https://ibm-research.slack.com/archives/C049F4GK05T/p1702911455907359?thread_ts=1702910609.328829&cid=C049F4GK05T
 # ConvNets match https://arxiv.org/pdf/2310.16764.pdf
