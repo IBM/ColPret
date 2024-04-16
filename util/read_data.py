@@ -47,32 +47,44 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     model_name: str, a unique identifier of the model (human interpretable)
     """
     if save_in and not force:
+        os.makedirs(os.path.dirname(save_in), exist_ok=True)
         if os.path.isfile(save_in):
             return pd.read_csv(save_in)
     dfs = []
 
+    def name_to_param(name):
+        if "base" in name:
+            return 247586304
+        elif "large" in name:
+            return 783173632
+        elif "xxl" in name:
+            return 11135426560
+        elif "xl" in name:
+            return 2849804288
 
+    df = pd.read_csv("aggregated_eval/T5_pile.csv")
+    df["checkpoint"] = df.apply(
+        lambda row: hf_checkpoint(f"EleutherAI/pile-t5-{row['model_name']}", f"step_{row['steps']}"), axis=1)
+    df["loss_cols"] = [["val_perplexity"]] * len(df)  # let later processing choose
+    df["original_paper"] = "t5-pile"
+    df["domain"] = "LM"
+    df["num_params"] = df["model_name"].apply(name_to_param)
+    df["scaled_set"] = "t5-pile"
 
+    df["seed"] = "0"
+    df = df.rename(columns={"steps": "tokens_seen"})
+    df = df[df["tokens_seen"] != 0]
+    df["model_name"] = df.apply(lambda row: f"pile-t5-{row['model_name']}", axis=1)
+    df["arch"] = "enc-dec"
+    df["flops"] = None
+    df["epochs"] = 1
+    df["data"] = "pile-deduped"
+    df["model_type"] = "t5-pile"
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
     res = pd.concat(dfs)
     res["loss_cols"] = res["loss_cols"].apply(tuple)
 
-    df = pd.read_csv("aggregated_eval/T5_pile.csv", index_col="index")
-    min_max_cols = [col for col in df.columns if col.endswith("_MIN") or col.endswith("_MAX")]
-    df = df.drop(columns=min_max_cols)
-    df["tokens_per_epoch"] = to_int("1.25T")
-    df["epochs"] = df["tokens_seen"] / df["tokens_per_epoch"]
-    loss_cols = []
-    loss_cols += [x for x in df.columns if "stream" in x]  # chose to use downstream
-    loss_cols += [x for x in df.columns if "plex" in x]  # chose to use validation loss
-    df["loss_cols"] = [loss_cols] * len(df)  # let later processing choose
-    df["original_paper"] = "arxiv.org/abs/2312.06550"
-    df["domain"] = "LM"
-    df["num_params"] = df["num_params"].apply(to_int)
-    df["scaled_set"] = np.nan
-    df["seed"] = "0"
-    df = df[df["tokens_seen"] != 0]
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
 
     df = pd.read_csv("aggregated_eval/datablations_losses.csv", index_col="index")
     df["num_params"] = df["num_params"].apply(to_int)

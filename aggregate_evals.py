@@ -1,11 +1,11 @@
+import json
 import math
 import os
-import json
+import re
 from functools import reduce
 
 import numpy as np
 import pandas as pd
-import re
 
 from util.naming import to_int
 from util.read_data import hf_checkpoint
@@ -365,15 +365,51 @@ def aggregate_olmo(path, save_dir):
     res_df.to_csv(os.path.join(save_dir, f"olmo.csv"), index=False)
 
 
-def aggregate_t5_pile(path, save_dir):
-    path = os.path.join("raw_data", path)
-    res_df = {}
-    for root, dirnames, filenames in os.walk(path):
-        model_name =
-    res_df["checkpoint"] = res_df.apply(olmo_checkpoint, axis=1)
+def t5_root_to_name(root):
+    if "base" in root:
+        return "base"
+    elif "large" in root:
+        return "large"
+    elif "xxl" in root:
+        return "xxl"
+    elif "xl" in root:
+        return "xl"
 
+
+def aggregate_t5_pile(path, save_dir):
+    import tensorflow as tf
+    from tensorflow.python.summary.summary_iterator import summary_iterator as si
+    path = os.path.join("raw_data", path)
+    train = {}
+    for root, dirnames, filenames in os.walk(path):
+        for filename in filenames:
+            model_name = t5_root_to_name(root)
+            print(f"processing {os.path.join(root, filename)}")
+            if "infer" in root:
+                with open(os.path.join(root, filename)) as fl:
+                    data = fl.readlines()
+                for line in data:
+                    info = json.loads(line)
+                    key = (model_name, info["step"])
+                    if key not in train:
+                        train[key] = {}
+                    if info["perplexity"]:
+                        train[key]["val_perplexity"] = info["perplexity"] # note that we pick the last when repeated entries exists (due to reinitialized)
+            if "train" in root:
+                try:
+                    sum_it = si(os.path.join(root, filename))
+                    for line in sum_it:
+                        key = (model_name, line.step)
+                        if key not in train:
+                            train[key] = {}
+                        for subline in line.summary.value:
+                            train[key][subline.tag] = tf.make_ndarray(subline.tensor)
+                except Exception as e:
+                    print(f"Corrupted file {os.path.join(root, filename)}")
+    res_df = pd.DataFrame(train).transpose().reset_index(names=["model_name", "steps"])
     os.makedirs(save_dir, exist_ok=True)
-    res_df.to_csv(os.path.join(save_dir, f"olmo.csv"), index=False)
+    res_df.to_csv(os.path.join(save_dir, f"t5_pile.csv"), index=False)
+
 
 if __name__ == '__main__':
     aggregate_t5_pile("t5_pile", save_dir="aggregated_eval")
