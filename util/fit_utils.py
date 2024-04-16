@@ -1,8 +1,12 @@
+from dataclasses import dataclass
+
 import ast
 import json
 import math
 import os
 import time
+from enum import Enum
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -31,6 +35,26 @@ import seaborn as sns
 # a, b, e, alpha, beta, rd_star, rn_star = [6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596, 15.387756, 5.309743]
 epsilon = 1e-6
 
+
+class LossType(Enum):
+    NORM_ACC = "norm_acc"
+    BPB = "bpb"
+    LOSS = "loss"
+    PERP = "perp"
+    BYTE_PERP = "byte_perp"
+    LIKELIHOOD_DIFFERENCE = "likelihood_difference"
+    ACC1LIKE = "1acc_like"
+    ACC100LIKE = "100acc_like"
+    UNK = "unk"
+
+    def to_string(self):
+        return f'{self.value})'
+
+    @classmethod
+    def join(cls, loss_types, sep):
+        return sep.join([x.value for x in loss_types])
+
+
 def single_scaling(train_df, test_df, fit_info, abs_mnd):
     if train_df.empty or test_df.empty:
         popt = None
@@ -47,7 +71,7 @@ def single_scaling(train_df, test_df, fit_info, abs_mnd):
         mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
         predicted_train = fit_info.func(train_df, *popt)
         train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
-    return mse,mnd,train_mnd,predicted, popt
+    return mse, mnd, train_mnd, predicted, popt
 
 
 def mean_squared_error(pred, gold):
@@ -117,21 +141,21 @@ def fit(fit_info: FitInfo, metadata, perf, default=None):
 
 
 def aggregate_row_loss(row, graceful=False):
-    return np.mean([row[x] for x in ast.literal_eval(row["loss_cols"]) if not graceful or x in row])
+    return np.mean([row[x] for x in ast.literal_eval(str(row["loss_cols"])) if not graceful or x in row])
 
 
 def normalize_metric(metric, score):
-    if metric == "perp":
+    if metric == LossType.PERP:
         return np.log2(score)
-    if metric == "loss":
+    if metric == LossType.LOSS:
         return score
-    elif "acc" in metric:
-        if "100" not in metric:
+    elif "acc" in metric.value:
+        if "100" not in metric.value:
             score *= 100
         return math.log(score)
-    elif "likelihood" in metric:
+    elif "likelihood" in metric.value:
         return score
-    elif "unk" in metric:
+    elif metric == LossType.UNK:
         return score
     else:
         raise ValueError((metric, score))
@@ -195,10 +219,11 @@ def cached_fit(cache, cache_id, fit_info, metadata, perf, default=None):
     return popt
 
 
-def normalize_loss(df, loss_types=None):
+def normalize_loss(df, loss_types: Tuple[LossType] = None):
     metric_map = metric_per_column(df)
     if loss_types:
-        drop_cols = [col for col, loss_type in metric_map.items() if loss_type not in loss_types and loss_type != "unk"]
+        drop_cols = [col for col, loss_type in metric_map.items() if
+                     loss_type not in loss_types and loss_type != LossType.UNK]
         df = df.drop(columns=drop_cols)
     for col, loss_type in metric_map.items():
         if col not in df.columns:
@@ -207,7 +232,7 @@ def normalize_loss(df, loss_types=None):
     return df
 
 
-def get_perf_df(df, loss_types, graceful=True, force=False, save_in=None):
+def get_perf_df(df, loss_types: Tuple[LossType], graceful=True, force=False, save_in=None):
     if save_in and not force:
         if os.path.isfile(save_in):
             return pd.read_csv(save_in)
@@ -220,7 +245,8 @@ def get_perf_df(df, loss_types, graceful=True, force=False, save_in=None):
     return df
 
 
-def scale_fit_per_model(df, force=False, fig_dir=None, show=False, loss_types=["perp"], at_least_loss=float("inf"),
+def scale_fit_per_model(df, force=False, fig_dir=None, show=False, loss_types:Tuple[LossType]=(LossType.PERP, LossType.LOSS),
+                        at_least_loss=float("inf"),
                         abs_mnd=True):
     """
     Predict each model with the begginning of its own training
@@ -242,7 +268,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False, loss_types=["
     train_percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"scale_fit_per_model_" + str(abs_mnd) + "_".join(loss_types)
+    cache_name = f"scale_fit_per_model_" + str(abs_mnd) + LossType.join(loss_types=loss_types, sep="_")
     cache = get_cache(cache_name, force)
     evals = []
     for model_name in df["model_name"].unique():
@@ -312,7 +338,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False, loss_types=["
         metric_map = metric_per_column(df)
         to_add = to_add[
             (col for col in to_add.index if
-             col not in row.index and (col not in metric_map or metric_map[col] == "unk"))]
+             col not in row.index and (col not in metric_map or metric_map[col] == LossType.UNK))]
         return pd.concat([row, to_add])
 
     evals = evals.apply(add_info, axis=1)
@@ -417,7 +443,8 @@ def plot_models_percentage_hist(evals, eval, fig_dir, iterate_over="scaled_set",
         plt.clf()
 
 
-def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=["perp"], at_least_loss=float("inf"),
+def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
+                       at_least_loss=float("inf"),
                        train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
                        abs_mnd=True):
     cut_beginning = 10 ** 10
@@ -427,7 +454,7 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=["p
 
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"hist_one_model_fit_{abs_mnd}_" + "_".join(loss_types)
+    cache_name = f"hist_one_model_fit_{abs_mnd}_" + LossType.join(loss_types=loss_types, sep="_")
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -473,7 +500,7 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=["p
                     #     mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
                     #     predicted_train = fit_info.func(train_df, *popt)
                     #     train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
-                    mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info,abs_mnd=abs_mnd)
+                    mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_mnd=abs_mnd)
                     last_pred = predicted[-1] if predicted is not None else None
                     res = (scaled_set, percentage, mse, mnd, last_pred, largest_model, num_model + 1, current_model,
                            train_model_size,
@@ -496,7 +523,8 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=["p
                                 show=show)
 
 
-def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=["perp"], at_least_loss=float("inf"),
+def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
+             at_least_loss=float("inf"),
              train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
              abs_mnd=True):
     """
@@ -520,7 +548,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=["perp"], at_
 
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"hist_fit_{abs_mnd}_" + "_".join(loss_types)
+    cache_name = f"hist_fit_{abs_mnd}_" + LossType.join(loss_types, "_")
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -613,7 +641,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=["perp"], at_
         metric_map = metric_per_column(df)
         to_add = to_add[
             (col for col in to_add.index if
-             col not in row.index and (col not in metric_map or metric_map[col] == "unk"))]
+             col not in row.index and (col not in metric_map or metric_map[col] == LossType.UNK))]
         return pd.concat([row, to_add])
 
     evals = evals.apply(add_info, axis=1)
@@ -691,6 +719,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=["perp"], at_
 
             plt.clf()
     print("done")
+
 
 #
 # def scaling_scaling_law(df, force=False):
@@ -823,40 +852,42 @@ def contains(str, lst):
 _metric_map = {}
 
 
-def metric_per_column(df):
+def metric_per_column(df) -> Dict[str, LossType]:
     if _metric_map:
         return _metric_map
     for column in df.select_dtypes(include='number'):
+        norm_column = column.lower().strip()
         if column in _metric_map:
             continue
-        elif contains(column, ("norm", "quasi")) and "acc" in column:
-            _metric_map[column] = "norm_acc"
-        elif contains(column, ("acc", "pct_ster", "exact_match", " em", "_em", "downstream_eval", "bpb")):
+        elif contains(norm_column, ("norm", "quasi")) and "acc" in norm_column:
+            _metric_map[column] = LossType("norm_acc")
+        elif contains(norm_column, ("acc", "pct_ster", "exact_match", " em", "_em", "downstream_eval", "bpb")):
             _metric_map[column] = "1acc" if df[column].max() <= 1 else "100acc"
-        elif contains(column, "bits_per_byte"):
-            _metric_map[column] = "bpb"
-        elif contains(column, ("loss")):
-            _metric_map[column] = "loss"
-        elif contains(column, ("perp", "ppl")):
-            _metric_map[column] = "perp"
-            if contains(column, "byte"):
-                _metric_map[column] = "byte_perp"
-        elif contains(column, "likelihood_difference"):
-            _metric_map[column] = "likelihood_difference"
+        elif contains(norm_column, "bits_per_byte"):
+            _metric_map[column] = LossType("bpb")
+        elif contains(norm_column, ("loss")):
+            _metric_map[column] = LossType("loss")
+        elif contains(norm_column, ("perp", "ppl")):
+            _metric_map[column] = LossType("perp")
+            if contains(norm_column, "byte"):
+                _metric_map[column] = LossType("byte_perp")
+        elif contains(norm_column, "likelihood_difference"):
+            _metric_map[column] = LossType("likelihood_difference")
         else:
             min_score, max_score = (df[column].min(), df[column].max())
             if (min_score >= 0 and max_score <= 1):
-                _metric_map[column] = "1acc_like"
+                _metric_map[column] = LossType("1acc_like")
             elif (min_score >= 0 and 10 < max_score < 100):
-                _metric_map[column] = "100acc_like"
+                _metric_map[column] = LossType("100acc_like")
             else:
-                _metric_map[column] = "unk"
+                _metric_map[column] = LossType("unk")
     return _metric_map
 
 
 def get_data_path(cache_dir):
-    return os.path.join(cache_dir, "data.csv")
+    return os.path.join(cache_dir, "data.csv.zst")
 
 
-def get_perf_path(cache_dir, loss_types):
-    return os.path.join(cache_dir, f"perfDF_{'_'.join(loss_types)}.csv")
+def get_perf_path(cache_dir: str, loss_types: Tuple[LossType]):
+    loss_types = [tp.value for tp in loss_types]
+    return os.path.join(cache_dir, f"perfDF_{'_'.join(loss_types)}.csv.zst")

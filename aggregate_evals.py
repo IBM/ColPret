@@ -365,7 +365,18 @@ def aggregate_olmo(path, save_dir):
     res_df.to_csv(os.path.join(save_dir, f"olmo.csv"), index=False)
 
 
+def aggregate_t5_pile(path, save_dir):
+    path = os.path.join("raw_data", path)
+    res_df = {}
+    for root, dirnames, filenames in os.walk(path):
+        model_name =
+    res_df["checkpoint"] = res_df.apply(olmo_checkpoint, axis=1)
+
+    os.makedirs(save_dir, exist_ok=True)
+    res_df.to_csv(os.path.join(save_dir, f"olmo.csv"), index=False)
+
 if __name__ == '__main__':
+    aggregate_t5_pile("t5_pile", save_dir="aggregated_eval")
     aggregate_olmo("OLMO", save_dir="aggregated_eval")
     aggregate_pythia("pythiarch/evals", save_dir="aggregated_eval")
     aggregate_lm360(save_dir="aggregated_eval")
