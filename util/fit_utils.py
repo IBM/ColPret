@@ -1,28 +1,20 @@
-from dataclasses import dataclass
-
 import ast
-import json
 import math
 import os
-import time
 from enum import Enum
-from typing import Dict, List, Tuple
+from typing import Dict, List, Callable
 
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn
-from scipy.optimize import curve_fit
-
 import sklearn.metrics
-import matplotlib
+from scipy.optimize import curve_fit
+from sklearn.decomposition import PCA
 
-from fitting_funcs import DATA_FIT_COLS, TestFit, FitInfo, ChinchillaFit, DatablationsFit, bound_params, \
-    Chinchilla1ModelFit
+from fitting_funcs import DATA_FIT_COLS, TestFit, FitInfo, ChinchillaFit, DatablationsFit, bound_params
 from util.cache import get_cache, save_cache
-from util.naming import to_int, to_str
-from util.plots import plot_pred_actual_compare
-
-import matplotlib.pyplot as plt
+from util.plots import plot_pred_actual_compare, capitalize_fig
 
 matplotlib.use('QtAgg')
 
@@ -45,6 +37,7 @@ class LossType(Enum):
     LIKELIHOOD_DIFFERENCE = "likelihood_difference"
     ACC1LIKE = "1acc_like"
     ACC100LIKE = "100acc_like"
+    TIME = "time"
     UNK = "unk"
 
     def to_string(self):
@@ -140,11 +133,17 @@ def fit(fit_info: FitInfo, metadata, perf, default=None):
     return popt
 
 
-def aggregate_row_loss(row, graceful=False):
-    return np.mean([row[x] for x in ast.literal_eval(str(row["loss_cols"])) if not graceful or x in row])
+def aggregate_row_loss(row, func: Callable = np.mean, graceful=False):
+    losses = []
+    for x in ast.literal_eval(str(row["loss_cols"])):
+        if not graceful or x in row:
+            losses.append(row[x])
+    return func(losses)
 
 
 def normalize_metric(metric, score):
+    if type(score) == type(str):
+        score = float(score)
     if metric == LossType.PERP:
         return np.log2(score)
     if metric == LossType.LOSS:
@@ -157,15 +156,17 @@ def normalize_metric(metric, score):
         return score
     elif metric == LossType.UNK:
         return score
+    elif metric == LossType.TIME:
+        return score
     else:
         raise ValueError((metric, score))
 
 
-def aggregate_loss(subdf, graceful=False):
+def aggregate_loss(subdf, func=np.mean, graceful=False):
     # col_to_metric = metric_per_column(subdf)
     # for col, metric in col_to_metric.items(): # assumes already normalized
     #     subdf[col] = subdf[col].apply(lambda x: normalize_metric(metric, x))
-    return subdf.apply(lambda row: aggregate_row_loss(row, graceful=graceful), axis=1)
+    return subdf.apply(lambda row: aggregate_row_loss(row, func=func, graceful=graceful), axis=1)
 
 
 def fit_per_model(df, predict_with=0.3, force=False):
@@ -219,7 +220,7 @@ def cached_fit(cache, cache_id, fit_info, metadata, perf, default=None):
     return popt
 
 
-def normalize_loss(df, loss_types: Tuple[LossType] = None):
+def normalize_loss(df, loss_types: List[LossType] = None):
     metric_map = metric_per_column(df)
     if loss_types:
         drop_cols = [col for col, loss_type in metric_map.items() if
@@ -232,12 +233,13 @@ def normalize_loss(df, loss_types: Tuple[LossType] = None):
     return df
 
 
-def get_perf_df(df, loss_types: Tuple[LossType], graceful=True, force=False, save_in=None):
+def get_perf_df(df, loss_types: List[LossType], graceful=True, force=False, save_in=None,
+                losses_aggregation_func: Callable = np.mean):
     if save_in and not force:
         if os.path.isfile(save_in):
             return pd.read_csv(save_in)
     df = normalize_loss(df, loss_types=loss_types)
-    perf = aggregate_loss(df, graceful=graceful)
+    perf = aggregate_loss(df, losses_aggregation_func, graceful=graceful)
     df = df.assign(perf=perf)
     df = df.dropna(subset=["perf"])
     if save_in:
@@ -245,7 +247,8 @@ def get_perf_df(df, loss_types: Tuple[LossType], graceful=True, force=False, sav
     return df
 
 
-def scale_fit_per_model(df, force=False, fig_dir=None, show=False, loss_types:Tuple[LossType]=(LossType.PERP, LossType.LOSS),
+def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
+                        loss_types: List[LossType] = (LossType.PERP, LossType.LOSS),
                         at_least_loss=float("inf"),
                         abs_mnd=True):
     """
@@ -429,18 +432,37 @@ def plot_models_percentage_hist(evals, eval, fig_dir, iterate_over="scaled_set",
                                 columns="percentage", vmin=0, vmax=1, min_rows=2,
                                 show=False):
     for scaled_set in evals[iterate_over].unique():
-        pivot = evals.query(f"@{iterate_over}=={iterate_over}").pivot(index=index, columns=columns,
-                                                                      values=eval)
-        if len(pivot.dropna(axis=0, how='all')) < min_rows:
-            print(f"Skipping {scaled_set}, no different scales of smaller models {pivot}")
-            continue
-        plt.title(scaled_set)
-        sns.heatmap(100 * pivot, annot=True, vmin=100 * vmin, vmax=100 * vmax)
-        if fig_dir:
-            plt.savefig(os.path.join(fig_dir, f"hist-perc-{eval}_{scaled_set}.png"), bbox_inches="tight")
-        if show:
-            plt.show()
-        plt.clf()
+        subdf = evals.query(f"@{iterate_over}=={iterate_over}")
+        plot_heatmap(evals=subdf, eval=eval, fig_dir=fig_dir, show=show,
+                     title=scaled_set,
+                     fig_name=f"hist-perc-{eval}_{scaled_set}.png", column=columns, index=index, vmin=vmin, vmax=vmax,
+                     min_rows=min_rows)
+        # plt.title(scaled_set)
+        # sns.heatmap(100 * pivot, annot=True, vmin=100 * vmin, vmax=100 * vmax)
+        # if fig_dir:
+        #     plt.savefig(os.path.join(fig_dir, f"hist-perc-{eval}_{scaled_set}.png"), bbox_inches="tight")
+        # if show:
+        #     plt.show()
+        # plt.clf()
+
+
+def get_per_model_metadata(df, index="model_name"):
+    return df.groupby(index).head(1).set_index(index).to_dict()
+
+
+def opts_explained(evals, eval, fig_dir, iterate_over="scaled_set", index="num_train_models",
+                   columns="percentage", metadata=None,
+                   show=False):
+    max_dict = evals.groupby(iterate_over)[[index, columns]].max().to_dict()
+    relevant = evals[evals.apply(
+        lambda row: row[index] == max_dict[index][row[iterate_over]] and row[columns] == max_dict[columns][
+            row[iterate_over]], axis=1)]
+    relevant = relevant.dropna(subset="popt")
+    popts = relevant["popt"]
+
+    my_model = PCA(n_components=len(popts.iloc[0]))
+    my_model.fit_transform(popts.tolist())
+    print("amount explained with N components:", my_model.explained_variance_ratio_.cumsum())
 
 
 def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
@@ -512,7 +534,7 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
     save_cache(cache, cache_name)
 
     # plot
-    evals = pd.DataFrame(evals, columns=["scaled_set", "percentage", "mse", "mnd", "last_pred", "largest_model",
+    evals = pd.DataFrame(evals, columns=["scaled_set", "percentage", "mse", "mnd", "last_pred", "test_model",
                                          "num_train_models", "smaller_model", "train_model_size", "popt"])
     evals["popt"] = evals["popt"].apply(np.asarray)
     # print(f"Mean guess: {evals.groupby('scaled_set')['popt'].mean()}")
@@ -521,12 +543,133 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
     eval = "mnd"
     plot_models_percentage_hist(evals, eval=eval, index="train_model_size", columns="percentage", fig_dir=fig_dir,
                                 show=show)
+    plot_2popt(evals, poptx=0, popty=2, name="tokens", eval=eval, fig_dir=fig_dir, show=show,
+               metadata=get_per_model_metadata(df, "scaled_set"))
+    opts_explained(evals, eval=eval, fig_dir=fig_dir, show=show,
+                   metadata=get_per_model_metadata(df, "scaled_set"))
+
+
+def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_set", index="num_train_models",
+               columns="percentage", vmin=0, vmax=1, min_rows=2, metadata=None,
+               show=False):
+    max_dict = evals.groupby(iterate_over)[[index, columns]].max().to_dict()
+    relevant = evals[evals.apply(
+        lambda row: row[index] == max_dict[index][row[iterate_over]] and row[columns] == max_dict[columns][
+            row[iterate_over]], axis=1)]
+    relevant = relevant.dropna(subset="popt")
+    labels = [metadata["arch"][model] for model in relevant[iterate_over]]
+    all_labels = list(set(labels))
+    markers_options = ["o", "v", "s", "P", "X"]
+    markers = [markers_options[all_labels.index(label)] for label in labels]
+    # model scale params
+    xs = [popt[poptx] for popt in relevant["popt"]]
+    ys = [popt[popty] for popt in relevant["popt"]]
+    for marker in set(markers):
+        x = [val for val, mar in zip(xs, markers) if mar == marker]
+        y = [val for val, mar in zip(ys, markers) if mar == marker]
+        plt.scatter(x=x, y=y, marker=marker)
+
+    capitalize_fig()
+    if fig_dir:
+        plt.savefig(os.path.join(fig_dir, f"popts_{name}.png"), bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.clf()
+
+
+def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
+                 index: str = "num_train_models",
+                 column: str = "percentage", vmin: float = 0, vmax: float = 1, min_rows: int = None,
+                 ascending_index: bool = True, annot: bool = True):
+    pivot = evals.pivot(index=index, columns=column, values=eval)
+    pivot = pivot.sort_values(index, ascending=ascending_index)
+    if min_rows and len(pivot.dropna(axis=0, how='all')) < min_rows:
+        print(f"Skipping {title}, no different scales of smaller models {pivot}")
+        return
+    if title:
+        plt.title(title)
+    sns.heatmap(100 * pivot, annot=annot, vmin=100 * vmin, vmax=100 * vmax)
+    capitalize_fig()
+    if fig_dir and fig_name:
+        plt.savefig(os.path.join(fig_dir, fig_name), bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.clf()
+
+
+def remove_outlier_scales(df):
+    return df[
+        # (df["scaled_set"] != "chinchilla") & # The model count here is a tad misleading
+        (~ df["scaled_set"].str.contains("interv")) &
+        (~ df["scaled_set"].str.contains("5sh")) &
+        (~ df["scaled_set"].str.contains("v0"))
+        ]
+
+
+def fill_nas(evals, eval, index, column):
+    column_vals = sorted(evals[column].unique())
+    col_idxs = {i: val for i, val in enumerate(column_vals)}
+
+    def fill(row):
+        if pd.isna(row[eval]):
+            row_col_val = row[column]
+            equivalents = evals.query(f"scaled_set=={row['scaled_set']} & {row[index]}==`{index}`")
+            if row_col_val == column_vals[-1]:
+                return row
+            elif row_col_val == column_vals[0] or pd.isna(equivalents[column_vals[col_idxs[row_col_val]] - 1]):
+                row[eval] = equivalents[column_vals[col_idxs[row_col_val]] + 1]
+            elif equivalents[column_vals[col_idxs[row_col_val]] + 1].isna():
+                row[eval] = equivalents[column_vals[col_idxs[row_col_val]] + 1] + equivalents[
+                    column_vals[col_idxs[row_col_val]] - 1]
+            else:
+                raise NotImplementedError
+        return row[eval]
+
+    evals[index] = evals.apply(fill, axis=1)
+    return evals
+
+
+def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
+                   column="percentage", vmin=0, vmax=0.35, min_rows=0):
+    evals = remove_outlier_scales(evals)
+    # by num
+    index = "#Train-models"
+    bins = [2, 3, 4, 5, 6, 7, 8, 1000]
+    bin_labels = ["2", "3", "4", "5", "6", "7", "8+"]
+    evals[index] = pd.cut(evals["num_train_models"], bins=bins, labels=bin_labels)
+    evals = fill_nas(evals, eval, index, column)
+
+    agg = evals.groupby([index, column])[eval].mean().reset_index()
+    plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=fig_dir, show=show, metadata=metadata,
+                 title=None, fig_name=f"hist-num-models-agg.png", column=column, vmin=vmin,
+                 vmax=vmax, annot=False)
+    plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=fig_dir, show=show, metadata=metadata,
+                 title=None, fig_name=f"hist-num-models-annot-agg.png", column=column, vmin=vmin,
+                 vmax=vmax, annot=True)
+    # by scale
+    index = "Scale up predicted"
+    bins = [1, 2, 4, 8, 16, 32, 2000]
+    bin_labels = [r"$1\times-2\times$", r"$4\times$", r"$8\times$", r"$16\times$", r"$32\times$", r"$32+\times$"]
+    largest = evals["test_model"].apply(lambda x: metadata["num_params"][x])
+    largest_train = evals["largest_train_model"].apply(lambda x: metadata["num_params"][x])
+    evals[index] = pd.cut([test / train for test, train in zip(largest, largest_train)], bins=bins,
+                          labels=bin_labels)
+
+    agg = evals.groupby([index, column])[eval].mean().reset_index()
+    plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=fig_dir, show=show, metadata=metadata,
+                 title=None,
+                 fig_name=f"hist-scale-agg.png", column=column, vmin=vmin, vmax=vmax, ascending_index=False,
+                 annot=False)
+    plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=fig_dir, show=show, metadata=metadata,
+                 title=None,
+                 fig_name=f"hist-scale-agg-annot.png", column=column, vmin=vmin, vmax=vmax, ascending_index=False,
+                 annot=True)
 
 
 def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
              at_least_loss=float("inf"),
              train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
-             abs_mnd=True):
+             abs_mnd=True, fit_info:FitInfo=ChinchillaFit):
     """
     Predict with each M models given x percentage of training the end of the last model's loss
     Args:
@@ -543,19 +686,16 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
     """
     cut_beginning = 10 ** 10
-    fit_info = ChinchillaFit
     test_percentage = 0.7
 
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"hist_fit_{abs_mnd}_" + LossType.join(loss_types, "_")
+    cache_name = f"hist_fit_{abs_mnd}_" + LossType.join(loss_types, "_") + f"{fit_info.na}"
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
-    # # skip families with one model
-    # keep_family = df.groupby("scaled_set")["model_name"].unique().apply((lambda x: len(x) > 1)).to_dict()
-    # df = df[df["scaled_set"].apply(lambda row: keep_family[row])]
-
+    resulting_cols = ["scaled_set", "percentage", "mse", "mnd", "last_pred", "test_model",
+                      "num_train_models", "largest_train_model", "flops", "popt"]
     for scaled_set in df["scaled_set"].unique():
         model_by_size = df.query("scaled_set==@scaled_set")[["model_name", "num_params"]].drop_duplicates().sort_values(
             "num_params")
@@ -565,15 +705,21 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
             continue
         for percentage in train_percentages:
             for num_train_models in range(2, len(smaller_models) + 1):
+                if len(smaller_models) > 20 and num_train_models % 10 != 0:
+                    continue
                 cache_id = scaled_set + str(num_train_models) + str(percentage)
                 if not force and cache_id in cache:
                     res = cache[cache_id]
+                    assert len(res) == len(resulting_cols), "columns mismatch, clean cache"
+
                 else:
-                    train_df = get_model_data(df=df, models=smaller_models.to_list()[:num_train_models],
+                    train_models = smaller_models.to_list()[:num_train_models]
+                    train_df = get_model_data(df=df, models=train_models,
                                               max_percentage=percentage,
                                               min_tokens=cut_beginning)
                     test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
+                    flops = train_df["flops"].sum()
                     if train_df.empty or test_df.empty:
                         popt = None
                     else:
@@ -600,8 +746,12 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                                     f"{scaled_set} {percentage} {num_train_models + 1}: mnd "
                                     f"on all train:{train_mnd} and only on the end:{end_train_mnd}")
                     last_pred = predicted[-1] if predicted is not None else None
-                    res = (scaled_set, percentage, mse, mnd, last_pred, largest_model, num_train_models + 1,
-                           tuple(popt) if popt is not None else None)
+                    res = (
+                        scaled_set, percentage, mse, mnd, last_pred, largest_model, num_train_models + 1,
+                        train_models[-1], flops,
+                        tuple(popt) if popt is not None else None)
+                    assert len(res) == len(
+                        resulting_cols), "columns mismatch, ensure saved (res) and loaded (resulting_cols) values match"
                     cache[cache_id] = res
                     print(f"{scaled_set} {percentage} {num_train_models + 1}: {mse}, {mnd}, {train_mnd}")
                 evals.append(res)
@@ -609,14 +759,24 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     save_cache(cache, cache_name)
 
     # plot
-    evals = pd.DataFrame(evals, columns=["scaled_set", "percentage", "mse", "mnd", "last_pred", "largest_model",
-                                         "num_train_models", "popt"])
+    evals = pd.DataFrame(evals, columns=resulting_cols)
     evals["popt"] = evals["popt"].apply(np.asarray)
     # print(f"Mean guess: {evals.groupby('scaled_set')['popt'].mean()}")
     # print(f"Mean guess: {evals['popt'].mean()}")
     print(f"models with max normalized distance: {evals.sort_values(by='mnd').dropna()[-10:]['scaled_set']}")
     eval = "mnd"
     plot_models_percentage_hist(evals, eval=eval, fig_dir=fig_dir, show=show)
+
+    metadata = get_per_model_metadata(df, "model_name")
+    aggregate_hist(evals, eval=eval, fig_dir=fig_dir, show=show, metadata=metadata)
+    aggregate_hist(evals, eval="flops", fig_dir=fig_dir, show=show, metadata=metadata)
+    plot_2popt(evals, poptx=0, popty=3, name="scale", eval=eval, fig_dir=fig_dir, show=show,
+               metadata=get_per_model_metadata(df, "scaled_set"))
+    plot_2popt(evals, poptx=1, popty=4, name="tokens", eval=eval, fig_dir=fig_dir, show=show,
+               metadata=get_per_model_metadata(df, "scaled_set"))
+    metadata = get_per_model_metadata(df, "scaled_set")
+    opts_explained(evals, eval=eval, fig_dir=fig_dir, show=show,
+                   metadata=metadata)
 
     # # plot on all models
     # for eval in ["mse", "mnd"]:
@@ -637,7 +797,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
     # Group by characteristics
     def add_info(row):
-        to_add = df[row["largest_model"] == df["model_name"]].iloc[0, :]
+        to_add = df[row["test_model"] == df["model_name"]].iloc[0, :]
         metric_map = metric_per_column(df)
         to_add = to_add[
             (col for col in to_add.index if
@@ -649,11 +809,11 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     bins = np.percentile(evals["num_params"].unique(), np.linspace(20, 100, 5))
     # bins = [to_int(num) for num in ["100m", "500m", "1B", "5B", "10B"]]
     evals["model_size"] = np.digitize(evals["num_params"], bins)
-    evals["best_loss"] = evals["largest_model"].apply(lambda model: df.query("@model==model_name")["perf"].min())
+    evals["best_loss"] = evals["test_model"].apply(lambda model: df.query("@model==model_name")["perf"].min())
     bins = np.percentile(evals["best_loss"].unique(), np.linspace(20, 100, 5))
     evals["best_loss_binned"] = np.digitize(evals["best_loss"], bins)
 
-    evals["max_tokens"] = evals["largest_model"].apply(
+    evals["max_tokens"] = evals["test_model"].apply(
         lambda model: df.query("@model==model_name")["tokens_seen"].max())
     bins = np.percentile(evals["max_tokens"].unique(), np.linspace(20, 100, 5))
     evals["max_tokens_binned"] = np.digitize(evals["max_tokens"], bins)
@@ -873,6 +1033,8 @@ def metric_per_column(df) -> Dict[str, LossType]:
                 _metric_map[column] = LossType("byte_perp")
         elif contains(norm_column, "likelihood_difference"):
             _metric_map[column] = LossType("likelihood_difference")
+        elif contains(norm_column, "tim"):
+            _metric_map[column] = LossType("time")
         else:
             min_score, max_score = (df[column].min(), df[column].max())
             if (min_score >= 0 and max_score <= 1):
@@ -888,6 +1050,6 @@ def get_data_path(cache_dir):
     return os.path.join(cache_dir, "data.csv.zst")
 
 
-def get_perf_path(cache_dir: str, loss_types: Tuple[LossType]):
+def get_perf_path(cache_dir: str, loss_types: List[LossType]):
     loss_types = [tp.value for tp in loss_types]
     return os.path.join(cache_dir, f"perfDF_{'_'.join(loss_types)}.csv.zst")

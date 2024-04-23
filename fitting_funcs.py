@@ -1,11 +1,12 @@
+from dataclasses import dataclass
 from typing import Tuple
 
-from dataclasses import dataclass
 import numpy as np
 
 
 @dataclass
 class FitInfo:
+    name: str
     func: callable
     guess: Tuple
     bounds: Tuple
@@ -34,7 +35,7 @@ def test_fit(metadata, a, b, e, alpha, beta, rd_star, rn_star):
 
 
 TestFit = FitInfo(func=test_fit, guess=[6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596, 15.387756, 5.309743],
-                  bounds=([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * 7))
+                  bounds=([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * 7), name="test")
 
 
 def bound_params(fit_info: FitInfo, bounded_vars: Tuple):
@@ -71,7 +72,7 @@ def bound_params(fit_info: FitInfo, bounded_vars: Tuple):
     bounds = tuple(zip(*(bound for i, bound in enumerate(zip(*fit_info.bounds)) if
                          i >= len(bounded_vars) or bounded_vars[i] is None)))
     guess = tuple(g for i, g in enumerate(fit_info.guess) if i >= len(bounded_vars) or bounded_vars[i] is None)
-    return FitInfo(func=bounded_func, bounds=bounds, guess=guess)
+    return FitInfo(func=bounded_func, bounds=bounds, guess=guess, name=fit_info.name + f"b:{bounded_vars}")
 
 
 def chinchilla_one_model_fit(metadata, b, e, beta):
@@ -79,7 +80,7 @@ def chinchilla_one_model_fit(metadata, b, e, beta):
 
 
 Chinchilla1ModelFit = FitInfo(func=chinchilla_one_model_fit, guess=(7.3049974, 0.6254804, 0.3526596),
-                              bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5))
+                              bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="chinchilla:bounded_scaling")
 
 
 def chinchilla_power_law_fit(metadata, a, b, e, alpha, beta):
@@ -93,8 +94,21 @@ def chinchilla_power_law_fit(metadata, a, b, e, alpha, beta):
     return L
 
 
+def mult_power_law_fit(metadata, a, b, e, alpha, beta):
+    num_params, tokens_seen, tokens_per_epoch = metadata["num_params"].array, metadata["tokens_seen"].array, metadata[
+        "tokens_per_epoch"].array
+    training_tokens = tokens_seen
+    A = np.exp(a)
+    B = np.exp(b)
+    E = np.exp(e)
+    L = E * A / num_params ** alpha * B / training_tokens ** beta
+    return L
+
+
 ChinchillaFit = FitInfo(func=chinchilla_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596),
-                        bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5))
+                        bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="chinchilla")
+MultFit = FitInfo(func=mult_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596),
+                  bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="mult")
 
 
 def datablations_fit(metadata, a, b, e, alpha, beta, rd_star, rn_star):
@@ -138,4 +152,4 @@ def datablation_scaling_law(num_params, training_tokens, unique_tokens, A, B, E,
 
 DatablationsFit = FitInfo(func=datablations_fit,
                           guess=[6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596, 15.387756, 5.309743],
-                          bounds=([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * 7))
+                          bounds=([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * 7), name="datablations")

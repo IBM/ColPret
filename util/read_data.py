@@ -62,6 +62,30 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
         elif "xl" in name:
             return 2849804288
 
+    df = pd.read_csv("raw_data/chinchila_extracted.csv")  # TODO extract the full training losses
+    df["checkpoint"] = np.nan
+    df["loss_cols"] = [["loss"]] * len(df)  # let later processing choose
+    df["original_paper"] = "chinchilla"
+    df["domain"] = "LM"
+    df["scaled_set"] = "chinchilla"
+
+    df["seed"] = "0"
+    df = df.rename(columns={"Model Size": "num_params", "steps": "tokens_seen", "Training FLOP": "flops"})
+    df = df.drop(columns=["x", "y", "color", "hex_color"])
+    df["num_params"] = df["num_params"].apply(int)
+    df["model_name"] = df["num_params"].apply(lambda x: f"chin{x}")
+    df["tokens_seen"] = df.apply(lambda row: row["flops"] / 6 / to_int(row["num_params"]), axis=1)
+    df = df[df["tokens_seen"] != 0]
+    df["model_name"] = df.apply(lambda row: f"pile-t5-{row['model_name']}", axis=1)
+    df["arch"] = "dec"
+    df["epochs"] = 1
+    df["data"] = "MassiveText"  # unknown Google thing
+    df["model_type"] = "Gopher"  # slight changes, adamW, slight tokenizer change
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
+    res = pd.concat(dfs)
+    res["loss_cols"] = res["loss_cols"].apply(tuple)
+
     df = pd.read_csv("aggregated_eval/T5_pile.csv")
     df["checkpoint"] = df.apply(
         lambda row: hf_checkpoint(f"EleutherAI/pile-t5-{row['model_name']}", f"step_{row['steps']}"), axis=1)
@@ -73,6 +97,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
     df["seed"] = "0"
     df = df.rename(columns={"steps": "tokens_seen"})
+    df["tokens_seen"] *= 1e6
     df = df[df["tokens_seen"] != 0]
     df["model_name"] = df.apply(lambda row: f"pile-t5-{row['model_name']}", axis=1)
     df["arch"] = "enc-dec"
@@ -84,7 +109,6 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     dfs.append(df)
     res = pd.concat(dfs)
     res["loss_cols"] = res["loss_cols"].apply(tuple)
-
 
     df = pd.read_csv("aggregated_eval/datablations_losses.csv", index_col="index")
     df["num_params"] = df["num_params"].apply(to_int)
@@ -102,11 +126,11 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["loss_cols"] = [("loss",)] * len(df)
     df["seed"] = "0"
 
-    from util.fit_utils import LossType
-    loss_types = (LossType.PERP, LossType.LOSS)
-    from fit import get_perf_df
-    a = get_perf_df(df, loss_types)
-    print(a.groupby("model_name")["perf"].min().to_dict())
+    # from util.fit_utils import LossType
+    # loss_types = (LossType.PERP, LossType.LOSS)
+    # from fit import get_perf_df
+    # a = get_perf_df(df, loss_types)
+    # print(a.groupby("model_name")["perf"].min().to_dict())
 
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
@@ -131,12 +155,12 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["loss_cols"] = [("loss",)] * len(df)
     df["seed"] = "0"
 
-    from util.fit_utils import LossType
-    loss_types = (LossType.PERP, LossType.LOSS)
-    from fit import get_perf_df
-    a = get_perf_df(df, loss_types)
-    print(a.groupby("model_name")[
-              "perf"].min().to_dict())  # TODO problem with processing? why are those all the same per model size?
+    # from util.fit_utils import LossType
+    # loss_types = (LossType.PERP, LossType.LOSS)
+    # from fit import get_perf_df
+    # a = get_perf_df(df, loss_types)
+    # print(a.groupby("model_name")[
+    #           "perf"].min().to_dict())  # TODO problem with processing? why are losses all the same per model size?
 
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
@@ -309,7 +333,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     loss_cols += [x for x in df.columns if "stream" in x]  # chose to use downstream
     loss_cols += [x for x in df.columns if "plex" in x]  # chose to use validation loss
     df["loss_cols"] = [loss_cols] * len(df)  # let later processing choose
-    df["original_paper"] = "arxiv.org/abs/2312.06550"
+    df["original_paper"] = "LM360:arxiv-2312.06550"
     df["domain"] = "LM"
     df["num_params"] = df["num_params"].apply(to_int)
     df["scaled_set"] = np.nan
@@ -342,7 +366,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["loss_cols"] = df.apply(lambda row: [x for x in loss_columns if row[x]], axis=1)
     # df["loss_cols"] = df["loss_cols"].apply([x for x in df.columns if "plex" in x]) # chose to use validation loss
 
-    df["original_paper"] = "https://arxiv.org/abs/2306.04640"
+    df["original_paper"] = "t5-pile"
     df["domain"] = "LM"
     df["checkpoint"] = np.nan
     df["num_params"] = df["num_params"].apply(to_int)
@@ -541,3 +565,4 @@ if __name__ == '__main__':
 # multi-modal scaling laws https://openreview.net/pdf?id=2n7dHVhwJf Scaling Laws for Generative Mixed-Modal Language Models
 # Mow scaling law https://arxiv.org/abs/2402.07871
 # black mamba (MOW+mamba arch, might need to change current moe to dec moe or give moe a separate col) https://arxiv.org/abs/2402.01771
+# add chinchila extracted
