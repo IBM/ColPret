@@ -13,7 +13,7 @@ BASIC_DF_COLS = ["model_name", "model_type", "scaled_set", "tokens_seen", "flops
                  "original_paper", "seed"]
 DATA_AWARE_DF_COLS = BASIC_DF_COLS + ["epochs"]
 ARCH_AWARE_DF_COLS = BASIC_DF_COLS + ["arch"]
-ARCHS = ["dec", "enc", "enc-dec", "moe", np.nan]
+ARCHS = ["dec", "enc", "enc-dec", "moe", "ssm", np.nan]
 
 
 def test_df(df, relevant_cols, supress_zero_tokens=False):
@@ -321,8 +321,78 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
+    df = pd.read_csv("aggregated_eval/llm360Mamba3B.csv")
+    df["checkpoint"] = np.nan
+    df["loss_cols"] = [["loss"]] * len(df)  # let later processing choose
+    df["original_paper"] = "llm360-private"
+    df["domain"] = "LM"
+    df["num_params"] = to_int("3B")
+    df["scaled_set"] = "llm360Mamba"
+
+    df["seed"] = "0"
+    df = df.rename(columns={"step": "tokens_seen"})
+    df["tokens_seen"] *= to_int("500B") / 176703
+    df = df[df["tokens_seen"] != 0]
+    df["model_name"] = "LLM360Mamba3B"
+    df["arch"] = "ssm"
+    df["flops"] = None
+    df["epochs"] = 1
+    df["data"] = "LLM360/AmberDatasets"
+    df["model_type"] = "LLM360Mamba"
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
     res = pd.concat(dfs)
     res["loss_cols"] = res["loss_cols"].apply(tuple)
+    df = pd.read_csv("aggregated_eval/llm360Mamba3B.csv")
+    df["checkpoint"] = np.nan
+    df["loss_cols"] = [["loss"]] * len(df)  # let later processing choose
+    df["original_paper"] = "llm360-private"
+    df["domain"] = "LM"
+    df["num_params"] = to_int("3B")
+    df["scaled_set"] = "llm360Mamba"
+
+    df["seed"] = "0"
+    df = df.rename(columns={"step": "tokens_seen"})
+    df["tokens_seen"] *= to_int("500B") / 176703
+    df = df[df["tokens_seen"] != 0]
+    df["model_name"] = "LLM360Mamba3B"
+    df["arch"] = "ssm"
+    df["flops"] = None
+    df["epochs"] = 1
+    df["data"] = "LLM360/AmberDatasets"
+    df["model_type"] = "LLM360Mamba"
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
+    res = pd.concat(dfs)
+    res["loss_cols"] = res["loss_cols"].apply(tuple)
+
+    res = pd.concat(dfs)
+    res["loss_cols"] = res["loss_cols"].apply(tuple)
+
+    df = pd.read_csv("raw_data/gpt3/extracted.csv")
+    meta_cols = ["model_name", "num_params", "num_layers", "width", "num_heads", "head_dim", "batch_size", "lr"]
+    metadata = pd.read_excel("raw_data/gpt3/gpt3_metadata.xlsx", header=None, names=meta_cols)
+
+    model_names = metadata["model_name"].unique()
+    df["model_name"] = df["model"].apply(lambda x: [name for name in model_names if x.lower() in name.lower()][0])
+    df = pd.merge(df, metadata, on="model_name")
+    df["checkpoint"] = np.nan
+    df["loss_cols"] = [["val_loss"]] * len(df)  # let later processing choose
+    df["original_paper"] = "gpt3 - arxiv.org-abs-2005.14165"
+    df["domain"] = "LM"
+    df["scaled_set"] = "gpt3"
+    df["seed"] = "0"
+    df = df.rename(columns={"step": "tokens_seen"})
+    df["tokens_seen"] *= to_int("1b")
+    df = df[df["tokens_seen"] != 0]
+    df["arch"] = "dec"
+    df["flops"] = None
+    df["epochs"] = 1
+    df["data"] = "gpt3"
+    df["model_type"] = "gpt3"
+    df["num_params"] = df["num_params"].apply(to_int)
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
 
     df = pd.read_csv("aggregated_eval/Amber.csv", index_col="index")
     min_max_cols = [col for col in df.columns if col.endswith("_MIN") or col.endswith("_MAX")]
