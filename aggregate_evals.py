@@ -245,6 +245,42 @@ def aggregate_pythia(path, save_dir):
     df.to_csv(os.path.join(save_dir, "pythia.csv"), index=False)
 
 
+def aggregate_mamballm360(save_dir):
+    dfs = []
+    df = pd.read_csv("raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_29_45.965-04_00_loss_curve.csv")
+    cols = [col for col in df.columns if
+            "loss" in col and "MIN" not in col and "MAX" not in col]  # note early means a later run, prefer later runs when duplicate losses (means a restart)
+
+    def extract_val(row):
+        for col in cols:
+            val = row[col]
+            if pd.notna(val):
+                return val
+
+    df["loss"] = df.apply(extract_val, axis=1)
+    df = df.drop(columns=[col for col in df.columns if col not in ["step", "loss"]])
+    dfs.append(df)
+
+    df = pd.read_csv("raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_29_57.317-04_00_learning_rate.csv")
+    cols = [col for col in df.columns if
+            "rate" in col and "MIN" not in col and "MAX" not in col]  # note early means a later run, prefer later runs when duplicate  (means a restart)
+    df["lr"] = df.apply(extract_val, axis=1)
+    df = df.drop(columns=[col for col in df.columns if col not in ["step", "lr"]])
+    dfs.append(df)
+
+    df = pd.read_csv("raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_30_05.126-04_00_grad_norm.csv")
+    cols = [col for col in df.columns if
+            "grad" in col and "MIN" not in col and "MAX" not in col]  # note early means a later run, prefer later runs when duplicate  (means a restart)
+    df["grad_norm"] = df.apply(extract_val, axis=1)
+    df = df.drop(columns=[col for col in df.columns if col not in ["step", "grad_norm"]])
+    dfs.append(df)
+
+    import functools as ft
+    df = ft.reduce(lambda left, right: pd.merge(left, right, on='step'), dfs)
+    os.makedirs(save_dir, exist_ok=True)
+    df.to_csv(os.path.join(save_dir, "llm360Mamba3B.csv"), index=False)
+
+
 def aggregate_lm360(save_dir):
     # read from HF
     #     import urllib.request
@@ -394,7 +430,8 @@ def aggregate_t5_pile(path, save_dir):
                     if key not in train:
                         train[key] = {}
                     if info["perplexity"]:
-                        train[key]["val_perplexity"] = info["perplexity"] # note that we pick the last when repeated entries exists (due to reinitialized)
+                        train[key]["val_perplexity"] = info[
+                            "perplexity"]  # note that we pick the last when repeated entries exists (due to reinitialized)
             if "train" in root:
                 try:
                     sum_it = si(os.path.join(root, filename))
@@ -412,7 +449,9 @@ def aggregate_t5_pile(path, save_dir):
 
 
 if __name__ == '__main__':
-    aggregate_t5_pile("t5_pile", save_dir="aggregated_eval")
-    aggregate_olmo("OLMO", save_dir="aggregated_eval")
-    aggregate_pythia("pythiarch/evals", save_dir="aggregated_eval")
-    aggregate_lm360(save_dir="aggregated_eval")
+    save_dir = "aggregated_eval"
+    aggregate_t5_pile("t5_pile", save_dir=save_dir)
+    aggregate_olmo("OLMO", save_dir=save_dir)
+    aggregate_pythia("pythiarch/evals", save_dir=save_dir)
+    aggregate_lm360(save_dir=save_dir)
+    aggregate_mamballm360(save_dir=save_dir)

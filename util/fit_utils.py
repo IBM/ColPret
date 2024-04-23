@@ -608,16 +608,23 @@ def remove_outlier_scales(df):
 
 def fill_nas(evals, eval, index, column):
     column_vals = sorted(evals[column].unique())
-    col_idxs = {i: val for i, val in enumerate(column_vals)}
+    col_idxs = {val: i for i, val in enumerate(column_vals)}
 
     def fill(row):
         if pd.isna(row[eval]):
             row_col_val = row[column]
-            equivalents = evals.query(f"scaled_set=={row['scaled_set']} & {row[index]}==`{index}`")
+            equivalents = evals[(evals["scaled_set"] == row['scaled_set']) & (row[index] == evals[index])]
+            col_val_to_equivalent_eval = equivalents.groupby(column)[eval].mean().to_dict()
             if row_col_val == column_vals[-1]:
                 return row
-            elif row_col_val == column_vals[0] or pd.isna(equivalents[column_vals[col_idxs[row_col_val]] - 1]):
-                row[eval] = equivalents[column_vals[col_idxs[row_col_val]] + 1]
+            elif row_col_val == column_vals[0] or pd.isna(col_val_to_equivalent_eval[column_vals[col_idxs[row_col_val]] - 1]):
+                replace_with_idx = col_idxs[row_col_val] + 1
+                replaced_val = equivalents[column_vals[replace_with_idx] == equivalents[column]][eval]
+                while replace_with_idx < len(column_vals) and pd.isna(col_val_to_equivalent_eval[column_vals[replace_with_idx]]):
+                    replace_with_idx += 1
+                if replace_with_idx >= equivalents:
+                    print(f"All row is na:{equivalents[eval]},{evals['scaled_set']},{evals[index]}, {evals}")
+                row[eval] = replaced_val
             elif equivalents[column_vals[col_idxs[row_col_val]] + 1].isna():
                 row[eval] = equivalents[column_vals[col_idxs[row_col_val]] + 1] + equivalents[
                     column_vals[col_idxs[row_col_val]] - 1]
@@ -669,7 +676,7 @@ def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
 def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
              at_least_loss=float("inf"),
              train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
-             abs_mnd=True, fit_info:FitInfo=ChinchillaFit):
+             abs_mnd=True, fit_info: FitInfo = ChinchillaFit):
     """
     Predict with each M models given x percentage of training the end of the last model's loss
     Args:
@@ -690,7 +697,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"hist_fit_{abs_mnd}_" + LossType.join(loss_types, "_") + f"{fit_info.na}"
+    cache_name = f"hist_fit_{abs_mnd}_" + LossType.join(loss_types, "_") + f"{fit_info.name}"
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
