@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 
 from util.fit_utils import plot_models_percentage_hist, mean_normalized_distance, fit, get_model_data, get_perf_df, \
-    metric_per_column, mean_squared_error, get_perf_path, get_data_path, single_scaling
-from fitting_funcs import ChinchillaFit, bound_params
+    metric_per_column, get_perf_path, get_data_path, single_scaling
+from fitting_funcs import ChinchillaFit
 from util.cache import save_cache, get_cache
 from util.read_data import get_data
 
