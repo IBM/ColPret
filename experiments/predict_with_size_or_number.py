@@ -60,9 +60,8 @@ def predict_smallest(df, force=False, fig_dir=None, show=False, loss_types=("per
 
 def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, loss_types=("perp"),
                                   at_least_loss=float("inf"),
-                                  num_train_models=4, abs_mnd=True):
+                                  num_train_models=4, abs_mnd=True, fit_info=ChinchillaFit):
     cut_beginning = 10 ** 10
-    fit_info = ChinchillaFit
     test_percentage = 0.7
     experiment_name = "closer_in_scale_is_predictive"
     fig_dir = os.path.join(fig_dir, experiment_name)

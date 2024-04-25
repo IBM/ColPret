@@ -25,8 +25,8 @@ if __name__ == '__main__':
     metadata = get_per_model_metadata(df)
 
     # fit
-    force = True
     force = False
+    force = True
     fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/'
     os.makedirs(fig_dir, exist_ok=True)
 
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     abs_mnd = True
     fit_info = ChinchillaFit
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
-    hist_one_model_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_1m"), at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
+    hist_one_model_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_1m"), at_least_loss=10, abs_mnd=abs_mnd)
     # scale_fit_per_model(df, force=force, fig_dir=os.path.join(fig_dir, "per_model"), at_least_loss=10, abs_mnd=abs_mnd)
     # minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
     # predict_smallest(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
@@ -51,8 +51,13 @@ if __name__ == '__main__':
     #
     # # data_aware_fit()
     # Multiplicative fit
+    force = True
+    force = False
+    cache_dir = '/Users/lc/PycharmProjects/CLPR/cache/mult_fit/'
+    fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/mult_fit'
+    data_path = get_data_path(cache_dir)
     fit_func = MultFit
-    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd)
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_func)
 
     # force = True
     # force = False
