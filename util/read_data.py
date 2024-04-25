@@ -76,7 +76,6 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["model_name"] = df["num_params"].apply(lambda x: f"chin{x}")
     df["tokens_seen"] = df.apply(lambda row: row["flops"] / 6 / to_int(row["num_params"]), axis=1)
     df = df[df["tokens_seen"] != 0]
-    df["model_name"] = df.apply(lambda row: f"pile-t5-{row['model_name']}", axis=1)
     df["arch"] = "dec"
     df["epochs"] = 1
     df["data"] = "MassiveText"  # unknown Google thing

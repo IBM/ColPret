@@ -588,9 +588,10 @@ def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
         return
     if title:
         plt.title(title)
-    sns.heatmap(100 * pivot, annot=annot, vmin=100 * vmin, vmax=100 * vmax)
+    sns.heatmap(100 * pivot, annot=annot, vmin=100 * vmin if vmin else vmin, vmax=100 * vmax if vmax else vmax)
     capitalize_fig()
     if fig_dir and fig_name:
+        os.makedirs(fig_dir, exist_ok=True)
         plt.savefig(os.path.join(fig_dir, fig_name), bbox_inches="tight")
     if show:
         plt.show()
@@ -614,30 +615,46 @@ def fill_nas(evals, eval, index, column):
         if pd.isna(row[eval]):
             row_col_val = row[column]
             equivalents = evals[(evals["scaled_set"] == row['scaled_set']) & (row[index] == evals[index])]
-            col_val_to_equivalent_eval = equivalents.groupby(column)[eval].mean().to_dict()
-            if row_col_val == column_vals[-1]:
-                return row
-            elif row_col_val == column_vals[0] or pd.isna(col_val_to_equivalent_eval[column_vals[col_idxs[row_col_val]] - 1]):
-                replace_with_idx = col_idxs[row_col_val] + 1
-                replaced_val = equivalents[column_vals[replace_with_idx] == equivalents[column]][eval]
-                while replace_with_idx < len(column_vals) and pd.isna(col_val_to_equivalent_eval[column_vals[replace_with_idx]]):
-                    replace_with_idx += 1
-                if replace_with_idx >= equivalents:
-                    print(f"All row is na:{equivalents[eval]},{evals['scaled_set']},{evals[index]}, {evals}")
-                row[eval] = replaced_val
-            elif equivalents[column_vals[col_idxs[row_col_val]] + 1].isna():
-                row[eval] = equivalents[column_vals[col_idxs[row_col_val]] + 1] + equivalents[
-                    column_vals[col_idxs[row_col_val]] - 1]
+            col_val_to_eval = equivalents.groupby(column)[eval].mean().to_dict()
+            if pd.notna(col_val_to_eval[column_vals[col_idxs[row_col_val]]]):  # there are duplicates of this status
+                row[eval] = col_val_to_eval[column_vals[col_idxs[row_col_val]]]
+            elif row_col_val == column_vals[-1]:
+                return row[eval]
+            elif row_col_val == column_vals[0] or pd.isna(col_val_to_eval[column_vals[col_idxs[row_col_val] - 1]]):
+                replace_with_idx_after = col_idxs[row_col_val] + 1
+                while replace_with_idx_after < len(column_vals) and pd.isna(
+                        col_val_to_eval[column_vals[replace_with_idx_after]]):
+                    replace_with_idx_after += 1
+                if replace_with_idx_after >= len(column_vals):
+                    print(f"All row is na:{col_val_to_eval},{evals['scaled_set']},{evals[index]}, {evals}")
+                    return row[eval]
+                row[eval] = col_val_to_eval[column_vals[replace_with_idx_after]]
             else:
-                raise NotImplementedError
+                replace_with_idx_after = col_idxs[row_col_val] + 1
+                while replace_with_idx_after < len(column_vals) and pd.isna(
+                        col_val_to_eval[column_vals[replace_with_idx_after]]):
+                    replace_with_idx_after += 1
+                if replace_with_idx_after >= len(column_vals):
+                    print(f"All row is na:{col_val_to_eval},{evals['scaled_set']},{evals[index]}, {evals}")
+                    return row[eval]
+                replace_with_idx_before = col_idxs[row_col_val] - 1
+                while replace_with_idx_before > 0 and pd.isna(
+                        col_val_to_eval[column_vals[replace_with_idx_before]]):
+                    replace_with_idx_before -= 1
+                if replace_with_idx_before <= 0:
+                    replace_with_idx_before = replace_with_idx_after
+                after_weight = abs(col_idxs[row_col_val] - replace_with_idx_before)
+                before_weight = abs(col_idxs[row_col_val] - replace_with_idx_after)
+                row[eval] = ((col_val_to_eval[column_vals[replace_with_idx_before]]) * before_weight + (col_val_to_eval[
+                    column_vals[replace_with_idx_after]]) * after_weight) / (before_weight + after_weight)
         return row[eval]
 
-    evals[index] = evals.apply(fill, axis=1)
+    evals[eval] = evals.apply(fill, axis=1)
     return evals
 
 
 def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
-                   column="percentage", vmin=0, vmax=0.35, min_rows=0):
+                   column="percentage", vmin=None, vmax=None, min_rows=0):
     evals = remove_outlier_scales(evals)
     # by num
     index = "#Train-models"
@@ -645,8 +662,10 @@ def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
     bin_labels = ["2", "3", "4", "5", "6", "7", "8+"]
     evals[index] = pd.cut(evals["num_train_models"], bins=bins, labels=bin_labels)
     evals = fill_nas(evals, eval, index, column)
-
-    agg = evals.groupby([index, column])[eval].mean().reset_index()
+    evals = evals.dropna(subset=[eval])
+    agg_scaled_reps = evals.groupby(["scaled_set", index, column])[
+        eval].mean().reset_index()  # don't overweight repetitions of different size etc. (like chinchilla)
+    agg = agg_scaled_reps.groupby([index, column])[eval].mean().reset_index()
     plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=fig_dir, show=show, metadata=metadata,
                  title=None, fig_name=f"hist-num-models-agg.png", column=column, vmin=vmin,
                  vmax=vmax, annot=False)
@@ -721,6 +740,9 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
                 else:
                     train_models = smaller_models.to_list()[:num_train_models]
+                    model_sizes = df[df["model_name"].isin(train_models)]["num_params"]
+                    model_sizes = [round(size, -6) for size in model_sizes]
+                    unique_model_sizes = len(np.unique(model_sizes))
                     train_df = get_model_data(df=df, models=train_models,
                                               max_percentage=percentage,
                                               min_tokens=cut_beginning)
@@ -750,17 +772,17 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                             end_train_mnd = mean_normalized_distance(end_predicted_train, end_train_df["perf"], abs_mnd)
                             if np.abs(train_mnd - end_train_mnd) > 0.5:
                                 print(
-                                    f"{scaled_set} {percentage} {num_train_models + 1}: mnd "
+                                    f"{scaled_set} {percentage} {unique_model_sizes}: mnd "
                                     f"on all train:{train_mnd} and only on the end:{end_train_mnd}")
                     last_pred = predicted[-1] if predicted is not None else None
                     res = (
-                        scaled_set, percentage, mse, mnd, last_pred, largest_model, num_train_models + 1,
+                        scaled_set, percentage, mse, mnd, last_pred, largest_model, unique_model_sizes,
                         train_models[-1], flops,
                         tuple(popt) if popt is not None else None)
                     assert len(res) == len(
                         resulting_cols), "columns mismatch, ensure saved (res) and loaded (resulting_cols) values match"
                     cache[cache_id] = res
-                    print(f"{scaled_set} {percentage} {num_train_models + 1}: {mse}, {mnd}, {train_mnd}")
+                    print(f"{scaled_set} {percentage} {unique_model_sizes}: {mse}, {mnd}, {train_mnd}")
                 evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
@@ -775,8 +797,8 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     plot_models_percentage_hist(evals, eval=eval, fig_dir=fig_dir, show=show)
 
     metadata = get_per_model_metadata(df, "model_name")
-    aggregate_hist(evals, eval=eval, fig_dir=fig_dir, show=show, metadata=metadata)
-    aggregate_hist(evals, eval="flops", fig_dir=fig_dir, show=show, metadata=metadata)
+    aggregate_hist(evals, eval=eval, fig_dir=fig_dir, show=show, metadata=metadata, vmin=0, vmax=0.35)
+    aggregate_hist(evals, eval="flops", fig_dir=os.path.join(fig_dir, "flops"), show=show, metadata=metadata)
     plot_2popt(evals, poptx=0, popty=3, name="scale", eval=eval, fig_dir=fig_dir, show=show,
                metadata=get_per_model_metadata(df, "scaled_set"))
     plot_2popt(evals, poptx=1, popty=4, name="tokens", eval=eval, fig_dir=fig_dir, show=show,
