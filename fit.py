@@ -1,13 +1,8 @@
-import ast
 import os
 
-import numpy as np
-
-from experiments.minimal_cut import minimal_cut
-from experiments.predict_with_size_or_number import predict_smallest, larger_is_predictable, \
-    closer_in_scale_is_predictive
-from fitting_funcs import MultFit, ChinchillaFit
-from util.fit_utils import metric_per_column, get_perf_path, get_data_path, scale_fit_per_model, hist_fit, \
+from experiments.predict_with_size_or_number import closer_in_scale_is_predictive
+from fitting_funcs import MultFit, ChinchillaFit, PCAFit, Manual2Fit
+from util.fit_utils import metric_per_column, get_perf_path, get_data_path, hist_fit, \
     hist_one_model_fit, get_perf_df, LossType, get_per_model_metadata
 from util.read_data import get_data
 
@@ -24,12 +19,14 @@ if __name__ == '__main__':
     df = get_perf_df(all_df, loss_types, save_in=perf_path, force=force)
     metadata = get_per_model_metadata(df)
 
-    # fit
-    force = False
+    #### fit
+
+    # chinchila based (datablation guesses)
     force = True
+    force = False
+    abs_mnd = True
     fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/'
     os.makedirs(fig_dir, exist_ok=True)
-
 
     metric_per_column(df)
     # df = df[df["model_type"].isin(["OPT"])]
@@ -38,26 +35,46 @@ if __name__ == '__main__':
     # df = df[df["domain"] == "LM"]
     abs_mnd = True
     fit_info = ChinchillaFit
-    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd,
+             fit_info=fit_info, cut_beginning=10 ** 10)
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_no_cut"), at_least_loss=10, abs_mnd=abs_mnd,
+             fit_info=fit_info, cut_beginning=0)
     hist_one_model_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_1m"), at_least_loss=10, abs_mnd=abs_mnd)
     # scale_fit_per_model(df, force=force, fig_dir=os.path.join(fig_dir, "per_model"), at_least_loss=10, abs_mnd=abs_mnd)
     # minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
     # predict_smallest(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
-    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
+    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd,
+                                  fit_info=fit_info)
     # larger_is_predictable(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_info)
     # # fit_on_smaller(df,force)
     # # scaling_scaling_law(df, force)
     # # cross_validate(df,force)
     #
-    # # data_aware_fit()
+
+    # keep the connection between a,alpha and b,beta constant (or more specifically use the PCA)
+    force = True
+    force = False
+    abs_mnd = True
+    fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/pca_fit'
+    fit_func = PCAFit
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd,
+             fit_info=fit_func)
+
+    # Manual fit (fit a->alpha and b-> betha and fit
+    force = True
+    force = False
+    fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/manual_fit'
+    fit_func = Manual2Fit
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd,
+             fit_info=fit_func)
+
     # Multiplicative fit
     force = True
     force = False
-    cache_dir = '/Users/lc/PycharmProjects/CLPR/cache/mult_fit/'
     fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/mult_fit'
-    data_path = get_data_path(cache_dir)
     fit_func = MultFit
-    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd, fit_info=fit_func)
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_mnd=abs_mnd,
+             fit_info=fit_func)
 
     # force = True
     # force = False

@@ -9,8 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import sklearn.metrics
+from matplotlib.colors import LogNorm
 from scipy.optimize import curve_fit
 from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression
 
 from fitting_funcs import DATA_FIT_COLS, TestFit, FitInfo, ChinchillaFit, DatablationsFit, bound_params
 from util.cache import get_cache, save_cache
@@ -564,6 +566,10 @@ def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_se
     # model scale params
     xs = [popt[poptx] for popt in relevant["popt"]]
     ys = [popt[popty] for popt in relevant["popt"]]
+    reg = LinearRegression().fit(np.array([xs]).T, np.array([ys]).T)
+    reg.coef_
+    reg.intercept_
+    print(reg.predict(np.array([[0, 1, 2, 3, 4, 5]]).T))
     for marker in set(markers):
         x = [val for val, mar in zip(xs, markers) if mar == marker]
         y = [val for val, mar in zip(ys, markers) if mar == marker]
@@ -580,7 +586,7 @@ def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_se
 def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
                  index: str = "num_train_models",
                  column: str = "percentage", vmin: float = 0, vmax: float = 1, min_rows: int = None,
-                 ascending_index: bool = True, annot: bool = True):
+                 ascending_index: bool = True, annot: bool = True, log_scale: bool = False):
     pivot = evals.pivot(index=index, columns=column, values=eval)
     pivot = pivot.sort_values(index, ascending=ascending_index)
     if min_rows and len(pivot.dropna(axis=0, how='all')) < min_rows:
@@ -588,7 +594,8 @@ def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
         return
     if title:
         plt.title(title)
-    sns.heatmap(100 * pivot, annot=annot, vmin=100 * vmin if vmin else vmin, vmax=100 * vmax if vmax else vmax)
+    sns.heatmap(100 * pivot, annot=annot, vmin=100 * vmin if vmin else vmin, vmax=100 * vmax if vmax else vmax,
+                norm=LogNorm() if log_scale else None)
     capitalize_fig()
     if fig_dir and fig_name:
         os.makedirs(fig_dir, exist_ok=True)
@@ -614,21 +621,14 @@ def fill_nas(evals, eval, index, column):
     def fill(row):
         if pd.isna(row[eval]):
             row_col_val = row[column]
+            if pd.isna(row[index]):
+                print(f"Empty index:{index} in {row}")
             equivalents = evals[(evals["scaled_set"] == row['scaled_set']) & (row[index] == evals[index])]
             col_val_to_eval = equivalents.groupby(column)[eval].mean().to_dict()
             if pd.notna(col_val_to_eval[column_vals[col_idxs[row_col_val]]]):  # there are duplicates of this status
                 row[eval] = col_val_to_eval[column_vals[col_idxs[row_col_val]]]
             elif row_col_val == column_vals[-1]:
                 return row[eval]
-            elif row_col_val == column_vals[0] or pd.isna(col_val_to_eval[column_vals[col_idxs[row_col_val] - 1]]):
-                replace_with_idx_after = col_idxs[row_col_val] + 1
-                while replace_with_idx_after < len(column_vals) and pd.isna(
-                        col_val_to_eval[column_vals[replace_with_idx_after]]):
-                    replace_with_idx_after += 1
-                if replace_with_idx_after >= len(column_vals):
-                    print(f"All row is na:{col_val_to_eval},{evals['scaled_set']},{evals[index]}, {evals}")
-                    return row[eval]
-                row[eval] = col_val_to_eval[column_vals[replace_with_idx_after]]
             else:
                 replace_with_idx_after = col_idxs[row_col_val] + 1
                 while replace_with_idx_after < len(column_vals) and pd.isna(
@@ -654,11 +654,12 @@ def fill_nas(evals, eval, index, column):
 
 
 def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
-                   column="percentage", vmin=None, vmax=None, min_rows=0):
+                   column="percentage", vmin=None, vmax=None, min_rows=0, log_scale=False):
     evals = remove_outlier_scales(evals)
     # by num
     index = "#Train-models"
     bins = [2, 3, 4, 5, 6, 7, 8, 1000]
+    bins = [bin - 0.1 for bin in bins]  # bins do not include left barrier allowes, e.g., only 2 in the first
     bin_labels = ["2", "3", "4", "5", "6", "7", "8+"]
     evals[index] = pd.cut(evals["num_train_models"], bins=bins, labels=bin_labels)
     evals = fill_nas(evals, eval, index, column)
@@ -668,10 +669,10 @@ def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
     agg = agg_scaled_reps.groupby([index, column])[eval].mean().reset_index()
     plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=fig_dir, show=show, metadata=metadata,
                  title=None, fig_name=f"hist-num-models-agg.png", column=column, vmin=vmin,
-                 vmax=vmax, annot=False)
+                 vmax=vmax, annot=False, log_scale=log_scale)
     plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=fig_dir, show=show, metadata=metadata,
                  title=None, fig_name=f"hist-num-models-annot-agg.png", column=column, vmin=vmin,
-                 vmax=vmax, annot=True)
+                 vmax=vmax, annot=True, log_scale=log_scale)
     # by scale
     index = "Scale up predicted"
     bins = [1, 2, 4, 8, 16, 32, 2000]
@@ -695,7 +696,7 @@ def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
 def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
              at_least_loss=float("inf"),
              train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
-             abs_mnd=True, fit_info: FitInfo = ChinchillaFit):
+             abs_mnd=True,cut_beginning = 10 ** 10, fit_info: FitInfo = ChinchillaFit):
     """
     Predict with each M models given x percentage of training the end of the last model's loss
     Args:
@@ -711,12 +712,12 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     Returns:
 
     """
-    cut_beginning = 10 ** 10
+
     test_percentage = 0.7
 
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"hist_fit_{abs_mnd}_" + LossType.join(loss_types, "_") + f"{fit_info.name}"
+    cache_name = f"hist_fit_{abs_mnd}_" + LossType.join(loss_types, "_") + f"{fit_info.name}_cut{cut_beginning}"
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -798,11 +799,14 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
     metadata = get_per_model_metadata(df, "model_name")
     aggregate_hist(evals, eval=eval, fig_dir=fig_dir, show=show, metadata=metadata, vmin=0, vmax=0.35)
-    aggregate_hist(evals, eval="flops", fig_dir=os.path.join(fig_dir, "flops"), show=show, metadata=metadata)
-    plot_2popt(evals, poptx=0, popty=3, name="scale", eval=eval, fig_dir=fig_dir, show=show,
-               metadata=get_per_model_metadata(df, "scaled_set"))
-    plot_2popt(evals, poptx=1, popty=4, name="tokens", eval=eval, fig_dir=fig_dir, show=show,
-               metadata=get_per_model_metadata(df, "scaled_set"))
+    aggregate_hist(evals, eval="flops", fig_dir=os.path.join(fig_dir, "flops"), show=show, metadata=metadata,
+                   log_scale=True)
+    if len(evals["popt"].dropna().iloc[0]) > 3:
+        plot_2popt(evals, poptx=0, popty=3, name="scale", eval=eval, fig_dir=fig_dir, show=show,
+                   metadata=get_per_model_metadata(df, "scaled_set"))
+    if len(evals["popt"].dropna().iloc[0]) > 4:
+        plot_2popt(evals, poptx=1, popty=4, name="tokens", eval=eval, fig_dir=fig_dir, show=show,
+                   metadata=get_per_model_metadata(df, "scaled_set"))
     metadata = get_per_model_metadata(df, "scaled_set")
     opts_explained(evals, eval=eval, fig_dir=fig_dir, show=show,
                    metadata=metadata)
