@@ -80,13 +80,47 @@ def chinchilla_one_model_fit(metadata, b, e, beta):
 
 
 Chinchilla1ModelFit = FitInfo(func=chinchilla_one_model_fit, guess=(7.3049974, 0.6254804, 0.3526596),
-                              bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="chinchilla:bounded_scaling")
+                              bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5),
+                              name="chinchilla:bounded_scaling")
 
 
 def chinchilla_power_law_fit(metadata, a, b, e, alpha, beta):
     num_params, tokens_seen, tokens_per_epoch = metadata["num_params"].array, metadata["tokens_seen"].array, metadata[
         "tokens_per_epoch"].array
     training_tokens = tokens_seen
+    A = np.exp(a)
+    B = np.exp(b)
+    E = np.exp(e)
+    L = E + A / num_params ** alpha + B / training_tokens ** beta
+    return L
+
+
+def manual_chinchilla_power_law_fit(metadata, a, b, e):
+    num_params, tokens_seen, tokens_per_epoch = metadata["num_params"].array, metadata["tokens_seen"].array, metadata[
+        "tokens_per_epoch"].array
+    training_tokens = tokens_seen
+    alpha = 0.0116280 + a * 0.05004588
+    beta = 0.23710262 + b * 0.03844353
+    A = np.exp(a)
+    B = np.exp(b)
+    E = np.exp(e)
+    L = E + A / num_params ** alpha + B / training_tokens ** beta
+    return L
+
+
+def PCA_chinchilla_power_law_fit(metadata, a, b, c):
+    num_params, tokens_seen, tokens_per_epoch = metadata["num_params"].array, metadata["tokens_seen"].array, metadata[
+        "tokens_per_epoch"].array
+    training_tokens = tokens_seen
+    pca_findings = np.array([[-0.10173792, 0.64745976, 0.75459505, -0.00767472, 0.03118762],
+                             [0.07297588, 0.76113056, -0.64410298, 0.00285629, 0.02186262],
+                             [0.99063847, 0.0113744, 0.12517598, 0.04886348, -0.02119861]]).T
+    # full pca [[-0.10173792,  0.64745976,  0.75459505, -0.00767472,  0.03118762],
+    #        [ 0.07297588,  0.76113056, -0.64410298,  0.00285629,  0.02186262],
+    #        [ 0.99063847,  0.0113744 ,  0.12517598,  0.04886348, -0.02119861],
+    #        [ 0.02367606, -0.03666797, -0.00683687, -0.02063154,  0.99881054],
+    #        [ 0.04897741, -0.00148489, -0.00137544, -0.99855878, -0.02185124]]
+    a, b, e, alpha, beta = pca_findings @ [a, b, c]
     A = np.exp(a)
     B = np.exp(b)
     E = np.exp(e)
@@ -109,6 +143,10 @@ ChinchillaFit = FitInfo(func=chinchilla_power_law_fit, guess=(6.255414, 7.304997
                         bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="chinchilla")
 MultFit = FitInfo(func=mult_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596),
                   bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="mult")
+PCAFit = FitInfo(func=PCA_chinchilla_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804),  # bad guess...
+                 bounds=([-np.inf, -np.inf, -np.inf], [np.inf] * 3), name="pca")
+Manual2Fit = FitInfo(func=manual_chinchilla_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804),  # bad guess...
+                     bounds=([-np.inf, -np.inf, -np.inf], [np.inf] * 3), name="manual")
 
 
 def datablations_fit(metadata, a, b, e, alpha, beta, rd_star, rn_star):
@@ -152,4 +190,5 @@ def datablation_scaling_law(num_params, training_tokens, unique_tokens, A, B, E,
 
 DatablationsFit = FitInfo(func=datablations_fit,
                           guess=[6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596, 15.387756, 5.309743],
-                          bounds=([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * 7), name="datablations")
+                          bounds=([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * 7),
+                          name="datablations")

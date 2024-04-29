@@ -266,11 +266,13 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
     # add downstream evals on the 262M model
     tasks = df[downstream_indx]["Task"].unique()
+    # no_lm_tasks = [task for task in tasks if "ppl" not in task and "loss" not in task and "lambada" not in task]
     downstream_dfs = [df[df["Task"] == task] for task in df[downstream_indx]["Task"].unique()]
     dfs_changed = [d.rename(columns={'loss': d["Task"].iloc[0]}).drop("Task", axis=1) for d in downstream_dfs]
     df = reduce(lambda left, right: pd.merge(left, right, how='outer'), dfs_changed)
     df["domain"] = "LM"
-    df["loss_cols"] = [tasks] * len(df)
+    # df["loss_cols"] = df.apply(lambda row: no_lm_tasks if "5shot" in row["model_name"] else tasks, axis=1)
+    df["loss_cols"] = df.apply(lambda row: tasks, axis=1)
     df["checkpoint"] = np.nan
     df["model_type"] = "LAMDA"
     df["seed"] = "0"
@@ -310,6 +312,12 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["flops"] = None
     df["arch"] = "dec"
     df["loss_cols"] = df["loss_cols"].apply(ast.literal_eval)
+    df["loss_cols"] = df.apply(lambda row: tuple(row["loss_cols"]
+                                                 if "5shot" not in row["model_name"]
+                                                 else tuple(task for task in row["loss_cols"]
+                                                            if
+                                                            "ppl" not in task and "loss" not in task and "lambada" not in task)),
+                               axis=1)
     df["original_paper"] = "pythia"
     df["domain"] = "LM"
     df["num_params"] = df["num_params"].apply(to_int)
@@ -607,6 +615,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
         lambda row: row["tokens_seen"] * 6 * to_int(row["num_params"]) if pd.isna(row["flops"]) else
         row["flops"], axis=1)
     if save_in:
+        os.makedirs(os.path.dirname(save_in), exist_ok=True)
         res.to_csv(save_in, index=False)
     return res
 
@@ -634,4 +643,4 @@ if __name__ == '__main__':
 # multi-modal scaling laws https://openreview.net/pdf?id=2n7dHVhwJf Scaling Laws for Generative Mixed-Modal Language Models
 # Mow scaling law https://arxiv.org/abs/2402.07871
 # black mamba (MOW+mamba arch, might need to change current moe to dec moe or give moe a separate col) https://arxiv.org/abs/2402.01771
-# add chinchila extracted
+# extract more from chinchila
