@@ -3,22 +3,22 @@ import os
 import numpy as np
 import pandas as pd
 
-from util.fit_utils import plot_models_percentage_hist, mean_normalized_distance, fit, get_model_data, get_perf_df, \
-    metric_per_column, get_perf_path, get_data_path, single_scaling
 from fitting_funcs import ChinchillaFit
 from util.cache import save_cache, get_cache
+from util.fit_utils import plot_models_percentage_hist, get_model_data, get_perf_df, \
+    metric_per_column, get_perf_path, get_data_path, single_scaling, nunique_model_size
 from util.read_data import get_data
 
 
 def predict_smallest(df, force=False, fig_dir=None, show=False, loss_types=("perp"), at_least_loss=float("inf"),
-                     num_train_models=4, abs_are=True):
+                     num_train_models=4, abs_are=True, fit_info=ChinchillaFit):
     cut_beginning = 10 ** 10
-    fit_info = ChinchillaFit
     test_percentage = 0.7
     experiment_name = "predict_smallest"
     fig_dir = os.path.join(fig_dir, experiment_name)
     os.makedirs(fig_dir, exist_ok=True)
-    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(num_train_models)
+    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(
+        num_train_models) + "_" + fit_info.name
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -42,9 +42,10 @@ def predict_smallest(df, force=False, fig_dir=None, show=False, loss_types=("per
                                           min_tokens=cut_beginning)
                 test_df = get_model_data(df=df, models=[smallest_model], min_percentage=test_percentage,
                                          min_tokens=cut_beginning)
+                unique_model_sizes = nunique_model_size(train_df)
                 mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are)
                 last_pred = predicted[-1] if predicted is not None else None
-                res = (scaled_set, mse, are, last_pred, smallest_model, num_train_models + 1,
+                res = (scaled_set, mse, are, last_pred, smallest_model, unique_model_sizes,
                        tuple(popt) if popt is not None else None)
                 cache[cache_id] = res
                 print(f"{scaled_set} {num_train_models + 1}: {mse}, {are}, {train_are}")
@@ -58,6 +59,7 @@ def predict_smallest(df, force=False, fig_dir=None, show=False, loss_types=("per
     plot_models_percentage_hist(evals, eval="are", index="num_models", columns="scaled_set", fig_dir=fig_dir,
                                 min_rows=1, show=show)
 
+
 def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, loss_types=("perp"),
                                   at_least_loss=float("inf"),
                                   num_train_models=4, abs_are=True, fit_info=ChinchillaFit):
@@ -66,7 +68,8 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
     experiment_name = "closer_in_scale_is_predictive"
     fig_dir = os.path.join(fig_dir, experiment_name)
     os.makedirs(fig_dir, exist_ok=True)
-    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(num_train_models)
+    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(
+        num_train_models) + "_" + fit_info.name
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -97,9 +100,9 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
                                          min_percentage=test_percentage,
                                          min_tokens=cut_beginning)
                 mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are)
-
+                unique_model_sizes = nunique_model_size(train_df)
                 last_pred = predicted[-1] if predicted is not None else None
-                res = (scaled_set, mse, are, last_pred, largest_model, num_train_models + 1, num_params,
+                res = (scaled_set, mse, are, last_pred, largest_model, unique_model_sizes, num_params,
                        tuple(popt) if popt is not None else None)
                 cache[cache_id] = res
                 print(f"{scaled_set} {largest_model} {num_train_models + 1}: {are}, {train_are}")
@@ -116,14 +119,14 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
 
 
 def larger_is_predictable(df, force=False, fig_dir=None, show=False, loss_types=("perp"), at_least_loss=float("inf"),
-                          num_train_models=4, abs_are=True):
+                          num_train_models=4, abs_are=True, fit_info=ChinchillaFit):
     cut_beginning = 10 ** 10
-    fit_info = ChinchillaFit
     test_percentage = 0.7
     experiment_name = "larger_is_predictable"
     fig_dir = os.path.join(fig_dir, experiment_name)
     os.makedirs(fig_dir, exist_ok=True)
-    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(num_train_models)
+    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(
+        num_train_models) + "_" + fit_info.name
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -154,9 +157,9 @@ def larger_is_predictable(df, force=False, fig_dir=None, show=False, loss_types=
                                          min_percentage=test_percentage,
                                          min_tokens=cut_beginning)
                 mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are)
-
+                unique_model_size = nunique_model_size(train_df)
                 last_pred = predicted[-1] if predicted is not None else None
-                res = (scaled_set, mse, are, last_pred, largest_model, num_train_models + 1, num_params,
+                res = (scaled_set, mse, are, last_pred, largest_model, unique_model_size, num_params,
                        tuple(popt) if popt is not None else None)
                 cache[cache_id] = res
                 print(f"{scaled_set} {largest_model} {num_train_models + 1}: {are}, {train_are}")

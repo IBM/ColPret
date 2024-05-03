@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 from scipy.optimize import curve_fit
@@ -13,7 +13,7 @@ class FitInfo:
     func: callable
     guess: Tuple
     bounds: Tuple
-    fit_func: callable = None
+    fit_func: Union[callable, None] = None
 
     def __post_init__(self):
         if self.fit_func is None:
