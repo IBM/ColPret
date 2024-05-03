@@ -11,14 +11,14 @@ from util.read_data import get_data
 
 
 def predict_smallest(df, force=False, fig_dir=None, show=False, loss_types=("perp"), at_least_loss=float("inf"),
-                     num_train_models=4, abs_mnd=True):
+                     num_train_models=4, abs_are=True):
     cut_beginning = 10 ** 10
     fit_info = ChinchillaFit
     test_percentage = 0.7
     experiment_name = "predict_smallest"
     fig_dir = os.path.join(fig_dir, experiment_name)
     os.makedirs(fig_dir, exist_ok=True)
-    cache_name = experiment_name + "_" + str(abs_mnd) + "_".join(loss_types) + "_" + str(num_train_models)
+    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(num_train_models)
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -42,31 +42,31 @@ def predict_smallest(df, force=False, fig_dir=None, show=False, loss_types=("per
                                           min_tokens=cut_beginning)
                 test_df = get_model_data(df=df, models=[smallest_model], min_percentage=test_percentage,
                                          min_tokens=cut_beginning)
-                mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_mnd)
+                mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are)
                 last_pred = predicted[-1] if predicted is not None else None
-                res = (scaled_set, mse, mnd, last_pred, smallest_model, num_train_models + 1,
+                res = (scaled_set, mse, are, last_pred, smallest_model, num_train_models + 1,
                        tuple(popt) if popt is not None else None)
                 cache[cache_id] = res
-                print(f"{scaled_set} {num_train_models + 1}: {mse}, {mnd}, {train_mnd}")
+                print(f"{scaled_set} {num_train_models + 1}: {mse}, {are}, {train_are}")
                 evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
-    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "mnd", "last_pred", "smallest_model",
+    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "are", "last_pred", "smallest_model",
                                          "num_models", "params"])
-    # print(f"models with max normalized distance: {evals.sort_values(by='mnd').dropna()[-10:]['largest_model']}")
-    evals = evals.loc[:, ["scaled_set", "mnd", "num_models"]]
-    plot_models_percentage_hist(evals, eval="mnd", index="num_models", columns="scaled_set", fig_dir=fig_dir,
+    # print(f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['largest_model']}")
+    evals = evals.loc[:, ["scaled_set", "are", "num_models"]]
+    plot_models_percentage_hist(evals, eval="are", index="num_models", columns="scaled_set", fig_dir=fig_dir,
                                 min_rows=1, show=show)
 
 def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, loss_types=("perp"),
                                   at_least_loss=float("inf"),
-                                  num_train_models=4, abs_mnd=True, fit_info=ChinchillaFit):
+                                  num_train_models=4, abs_are=True, fit_info=ChinchillaFit):
     cut_beginning = 10 ** 10
     test_percentage = 0.7
     experiment_name = "closer_in_scale_is_predictive"
     fig_dir = os.path.join(fig_dir, experiment_name)
     os.makedirs(fig_dir, exist_ok=True)
-    cache_name = experiment_name + "_" + str(abs_mnd) + "_".join(loss_types) + "_" + str(num_train_models)
+    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(num_train_models)
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -96,34 +96,34 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
                 test_df = get_model_data(df=df, models=[largest_model],
                                          min_percentage=test_percentage,
                                          min_tokens=cut_beginning)
-                mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_mnd)
+                mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are)
 
                 last_pred = predicted[-1] if predicted is not None else None
-                res = (scaled_set, mse, mnd, last_pred, largest_model, num_train_models + 1, num_params,
+                res = (scaled_set, mse, are, last_pred, largest_model, num_train_models + 1, num_params,
                        tuple(popt) if popt is not None else None)
                 cache[cache_id] = res
-                print(f"{scaled_set} {largest_model} {num_train_models + 1}: {mnd}, {train_mnd}")
+                print(f"{scaled_set} {largest_model} {num_train_models + 1}: {are}, {train_are}")
             evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
 
-    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "mnd", "last_pred", "largest_model",
+    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "are", "last_pred", "largest_model",
                                          "num_models", "num_params", "params"])
-    print(f"models with max normalized distance: {evals.sort_values(by='mnd').dropna()[-10:]['largest_model']}")
-    evals = evals.loc[:, ["scaled_set", "mnd", "num_models", "num_params"]]
-    plot_models_percentage_hist(evals, eval="mnd", index="num_models", columns="num_params", fig_dir=fig_dir,
+    print(f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['largest_model']}")
+    evals = evals.loc[:, ["scaled_set", "are", "num_models", "num_params"]]
+    plot_models_percentage_hist(evals, eval="are", index="num_models", columns="num_params", fig_dir=fig_dir,
                                 min_rows=1, show=show)
 
 
 def larger_is_predictable(df, force=False, fig_dir=None, show=False, loss_types=("perp"), at_least_loss=float("inf"),
-                          num_train_models=4, abs_mnd=True):
+                          num_train_models=4, abs_are=True):
     cut_beginning = 10 ** 10
     fit_info = ChinchillaFit
     test_percentage = 0.7
     experiment_name = "larger_is_predictable"
     fig_dir = os.path.join(fig_dir, experiment_name)
     os.makedirs(fig_dir, exist_ok=True)
-    cache_name = experiment_name + "_" + str(abs_mnd) + "_".join(loss_types) + "_" + str(num_train_models)
+    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + str(num_train_models)
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -153,22 +153,22 @@ def larger_is_predictable(df, force=False, fig_dir=None, show=False, loss_types=
                 test_df = get_model_data(df=df, models=[largest_model],
                                          min_percentage=test_percentage,
                                          min_tokens=cut_beginning)
-                mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_mnd)
+                mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are)
 
                 last_pred = predicted[-1] if predicted is not None else None
-                res = (scaled_set, mse, mnd, last_pred, largest_model, num_train_models + 1, num_params,
+                res = (scaled_set, mse, are, last_pred, largest_model, num_train_models + 1, num_params,
                        tuple(popt) if popt is not None else None)
                 cache[cache_id] = res
-                print(f"{scaled_set} {largest_model} {num_train_models + 1}: {mnd}, {train_mnd}")
+                print(f"{scaled_set} {largest_model} {num_train_models + 1}: {are}, {train_are}")
             evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
 
-    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "mnd", "last_pred", "largest_model",
+    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "are", "last_pred", "largest_model",
                                          "num_models", "num_params", "params"])
-    print(f"models with max normalized distance: {evals.sort_values(by='mnd').dropna()[-10:]['largest_model']}")
-    evals = evals.loc[:, ["scaled_set", "mnd", "num_models", "num_params"]]
-    plot_models_percentage_hist(evals, eval="mnd", index="num_models", columns="num_params", fig_dir=fig_dir,
+    print(f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['largest_model']}")
+    evals = evals.loc[:, ["scaled_set", "are", "num_models", "num_params"]]
+    plot_models_percentage_hist(evals, eval="are", index="num_models", columns="num_params", fig_dir=fig_dir,
                                 min_rows=1, show=show)
 
 
@@ -191,7 +191,7 @@ if __name__ == '__main__':
     # df = df[(df["model_type"] .isin(["GPT2"])) & (df["code"].isna())]
     # df = df[df["original_paper"] == "pythia"]
     # df = df[df["domain"] == "LM"]
-    abs_mnd = True
-    predict_smallest(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd)
-    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd)
-    larger_is_predictable(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_mnd=abs_mnd)
+    abs_are = True
+    predict_smallest(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are)
+    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are)
+    larger_is_predictable(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are)

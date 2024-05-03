@@ -2,6 +2,9 @@ from dataclasses import dataclass
 from typing import Tuple
 
 import numpy as np
+from scipy.optimize import curve_fit
+
+from util.torch_fit import chinchilla_torch_fit
 
 
 @dataclass
@@ -10,6 +13,11 @@ class FitInfo:
     func: callable
     guess: Tuple
     bounds: Tuple
+    fit_func: callable = None
+
+    def __post_init__(self):
+        if self.fit_func is None:
+            self.fit_func = curve_fit
 
 
 def test_fit(metadata, a, b, e, alpha, beta, rd_star, rn_star):
@@ -35,7 +43,8 @@ def test_fit(metadata, a, b, e, alpha, beta, rd_star, rn_star):
 
 
 TestFit = FitInfo(func=test_fit, guess=[6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596, 15.387756, 5.309743],
-                  bounds=([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * 7), name="test")
+                  bounds=([-np.inf, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf], [np.inf] * 7), name="test",
+                  fit_func=None)
 
 
 def bound_params(fit_info: FitInfo, bounded_vars: Tuple):
@@ -139,14 +148,20 @@ def mult_power_law_fit(metadata, a, b, e, alpha, beta):
     return L
 
 
+ChinchillaTorchFit = FitInfo(func=chinchilla_power_law_fit, guess=None,
+                             bounds=None, name="chinchillaTorch", fit_func=chinchilla_torch_fit)
+ChinchillaTorchGuessFit = FitInfo(func=chinchilla_power_law_fit,
+                                  guess=(6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596),
+                                  bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="chinchillaGuessTorch",
+                                  fit_func=chinchilla_torch_fit)
 ChinchillaFit = FitInfo(func=chinchilla_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596),
-                        bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="chinchilla")
+                        bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="chinchilla", fit_func=curve_fit)
 MultFit = FitInfo(func=mult_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804, 0.3526596, 0.3526596),
-                  bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="mult")
+                  bounds=([-np.inf, -np.inf, -np.inf, 0, 0], [np.inf] * 5), name="mult", fit_func=curve_fit)
 PCAFit = FitInfo(func=PCA_chinchilla_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804),  # bad guess...
-                 bounds=([-np.inf, -np.inf, -np.inf], [np.inf] * 3), name="pca")
+                 bounds=([-np.inf, -np.inf, -np.inf], [np.inf] * 3), name="pca", fit_func=curve_fit)
 Manual2Fit = FitInfo(func=manual_chinchilla_power_law_fit, guess=(6.255414, 7.3049974, 0.6254804),  # bad guess...
-                     bounds=([-np.inf, -np.inf, -np.inf], [np.inf] * 3), name="manual")
+                     bounds=([-np.inf, -np.inf, -np.inf], [np.inf] * 3), name="manual", fit_func=curve_fit)
 
 
 def datablations_fit(metadata, a, b, e, alpha, beta, rd_star, rn_star):
