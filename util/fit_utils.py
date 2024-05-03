@@ -50,23 +50,25 @@ class LossType(Enum):
         return sep.join([x.value for x in loss_types])
 
 
-def single_scaling(train_df, test_df, fit_info, abs_mnd):
+def single_scaling(train_df, test_df, fit_info, abs_are):
     if train_df.empty or test_df.empty:
         popt = None
     else:
         popt = fit(fit_info, train_df, train_df["perf"])
-    if popt is None:
-        mse = None
-        mnd = None
-        train_mnd = None
-        predicted = None
-    else:
+
+    mse = None
+    are = None
+    train_are = None
+    predicted = None
+    if not (popt is None or all(pd.isna(popt))):
         predicted = fit_info.func(test_df, *popt)
-        mse = mean_squared_error(predicted, test_df["perf"])
-        mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
-        predicted_train = fit_info.func(train_df, *popt)
-        train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
-    return mse, mnd, train_mnd, predicted, popt
+        if not all(pd.isna(predicted)):
+            predicted = fit_info.func(test_df, *popt)
+            mse = mean_squared_error(predicted, test_df["perf"])
+            are = mean_normalized_distance(predicted, test_df["perf"], abs_are)
+            predicted_train = fit_info.func(train_df, *popt)
+            train_are = mean_normalized_distance(predicted_train, train_df["perf"], abs_are)
+    return mse, are, train_are, predicted, popt
 
 
 def mean_squared_error(pred, gold):
@@ -109,9 +111,9 @@ def prepare_for_fit(df, columns):
 def fit(fit_info: FitInfo, metadata, perf, default=None):
     try:
         try:
-            popt, pcov = curve_fit(fit_info.func, metadata, perf, p0=fit_info.guess, bounds=fit_info.bounds)
+            popt, pcov = fit_info.fit_func(fit_info.func, metadata, perf, p0=fit_info.guess, bounds=fit_info.bounds)
         except RuntimeError as e:
-            popt, pcov = curve_fit(fit_info.func, metadata, perf, p0=fit_info.guess,
+            popt, pcov = fit_info.fit_func(fit_info.func, metadata, perf, p0=fit_info.guess,
                                    method='dogbox',
                                    bounds=fit_info.bounds)  # not sure who of the three is best (lm can only be used without bounds)
             print(
@@ -153,7 +155,7 @@ def normalize_metric(metric, score):
     elif "acc" in metric.value:
         if "100" not in metric.value:
             score *= 100
-        return math.log(score)
+        return math.log(score) if score else score
     elif "likelihood" in metric.value:
         return score
     elif metric == LossType.UNK:
@@ -252,7 +254,7 @@ def get_perf_df(df, loss_types: List[LossType], graceful=True, force=False, save
 def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
                         loss_types: List[LossType] = (LossType.PERP, LossType.LOSS),
                         at_least_loss=float("inf"),
-                        abs_mnd=True):
+                        abs_are=True):
     """
     Predict each model with the begginning of its own training
     Args:
@@ -262,7 +264,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
         show:
         loss_types:
         at_least_loss:
-        abs_mnd:
+        abs_are:
 
     Returns:
 
@@ -273,7 +275,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
     train_percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"scale_fit_per_model_" + str(abs_mnd) + LossType.join(loss_types=loss_types, sep="_")
+    cache_name = f"scale_fit_per_model_" + str(abs_are) + LossType.join(loss_types=loss_types, sep="_")
     cache = get_cache(cache_name, force)
     evals = []
     for model_name in df["model_name"].unique():
@@ -291,37 +293,37 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
                 # replaced by single_scaling
                 # if train_df.empty or test_df.empty:
                 #     mse = None
-                #     mnd = None
+                #     are = None
                 #     predicted = None
                 # else:
                 #     popt = fit(fit_info, train_df, train_df["perf"])
                 #     if popt is None:
                 #         mse = None
-                #         mnd = None
+                #         are = None
                 #         predicted = None
                 #     else:
                 #         predicted = fit_info.func(test_df, *popt)
                 #         mse = mean_squared_error(predicted, test_df["perf"])
-                #         mnd = (test_df["perf"] - predicted) / test_df["perf"]
-                #         if abs_mnd:
-                #             mnd = np.abs(mnd)
-                #         mnd = mnd.mean()
-                mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_mnd=abs_mnd)
+                #         are = (test_df["perf"] - predicted) / test_df["perf"]
+                #         if abs_are:
+                #             are = np.abs(are)
+                #         are = are.mean()
+                mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are=abs_are)
 
                 last_pred = predicted[-1] if predicted is not None else None
-                res = (model_name, percentage, mse, mnd, last_pred)
+                res = (model_name, percentage, mse, are, last_pred)
                 cache[cache_id] = res
-                print(f"{model_name} {percentage}: {mse}, {mnd}")
+                print(f"{model_name} {percentage}: {mse}, {are}")
             evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
 
     # plot
-    evals = pd.DataFrame(evals, columns=["model_name", "percentage", "mse", "mnd", "last_pred"])
-    print(f"models with max normalized distance: {evals.sort_values(by='mnd').dropna()[-10:]['model_name']}")
+    evals = pd.DataFrame(evals, columns=["model_name", "percentage", "mse", "are", "last_pred"])
+    print(f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['model_name']}")
 
     # # plot on all models
-    # for eval in ["mse", "mnd"]:
+    # for eval in ["mse", "are"]:
     #     plt.clf()
     #     for model in evals["model_name"].unique():
     #         subdf = evals.query("model_name==@model").dropna(subset=[eval])
@@ -359,11 +361,11 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
     bins = np.percentile(evals["max_tokens"].unique(), np.linspace(20, 100, 5))
     evals["max_tokens_binned"] = np.digitize(evals["max_tokens"], bins)
 
-    eval = "mnd"
+    eval = "are"
     for col_group in ["max_tokens_binned", "original_paper", "data", "arch", "model_size", "model_type",
                       "best_loss_binned"]:
         plt.clf()
-        # mnds = evals.groupby([col_group, "percentage"])["mnd"].mean().reset_index([1])
+        # ares = evals.groupby([col_group, "percentage"])["are"].mean().reset_index([1])
         for group in evals[col_group].unique():
             subdf = evals.query(f"{col_group}==@group").dropna(subset=[eval])
             subdf = subdf.groupby(["percentage"])[eval].mean().reset_index()
@@ -373,7 +375,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
             y = subdf[eval]
             sns.lineplot(x=x.tolist(), y=y.tolist(), label=group)
 
-        if abs_mnd:
+        if abs_are:
             plt.ylim(bottom=0)
         plt.legend(bbox_to_anchor=(1.04, 1), borderaxespad=0, title=col_group)
         plt.xlabel("Percentage of Training Trajectory Available")
@@ -385,7 +387,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
         plt.clf()
 
     # compare predictions to actual
-    eval = "mnd"
+    eval = "are"
     for col_group in [
         "original_paper"]:  # ["max_tokens_binned", "original_paper", "data", "arch", "model_size", "model_type", "best_loss_binned"]
         for group in evals[col_group].unique():
@@ -423,11 +425,11 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
 
 
 def mean_normalized_distance(predicted, target, abs):
-    mnd = (target - predicted) / target
+    are = (target - predicted) / target
     if abs:
-        mnd = np.abs(mnd)
-    mnd = mnd.mean()
-    return mnd
+        are = np.abs(are)
+    are = are.mean()
+    return are
 
 
 def plot_models_percentage_hist(evals, eval, fig_dir, iterate_over="scaled_set", index="num_train_models",
@@ -470,7 +472,7 @@ def opts_explained(evals, eval, fig_dir, iterate_over="scaled_set", index="num_t
 def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
                        at_least_loss=float("inf"),
                        train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
-                       abs_mnd=True):
+                       abs_are=True):
     cut_beginning = 10 ** 10
     fit_info = bound_params(ChinchillaFit, [6.255414, None, None, 0.3526596])
     # fit_info = Chinchilla1ModelFit
@@ -478,7 +480,7 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
 
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"hist_one_model_fit_{abs_mnd}_" + LossType.join(loss_types=loss_types, sep="_")
+    cache_name = f"hist_one_model_fit_{abs_are}_" + LossType.join(loss_types=loss_types, sep="_")
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -515,34 +517,34 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
                     #     popt = fit(fit_info, train_df, train_df["perf"])
                     # if popt is None:
                     #     mse = None
-                    #     mnd = None
-                    #     train_mnd = None
+                    #     are = None
+                    #     train_are = None
                     #     predicted = None
                     # else:
                     #     predicted = fit_info.func(test_df, *popt)
                     #     mse = mean_squared_error(predicted, test_df["perf"])
-                    #     mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
+                    #     are = mean_normalized_distance(predicted, test_df["perf"], abs_are)
                     #     predicted_train = fit_info.func(train_df, *popt)
-                    #     train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
-                    mse, mnd, train_mnd, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_mnd=abs_mnd)
+                    #     train_are = mean_normalized_distance(predicted_train, train_df["perf"], abs_are)
+                    mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are=abs_are)
                     last_pred = predicted[-1] if predicted is not None else None
-                    res = (scaled_set, percentage, mse, mnd, last_pred, largest_model, num_model + 1, current_model,
+                    res = (scaled_set, percentage, mse, are, last_pred, largest_model, num_model + 1, current_model,
                            train_model_size,
                            tuple(popt) if popt is not None else None)
                     cache[cache_id] = res
-                    print(f"{scaled_set} {percentage} {num_model}: {mse}, {mnd}, {train_mnd}")
+                    print(f"{scaled_set} on {percentage}% and {num_model} models: MSE {mse}, ARE {are}, training ARE {train_are}")
                 evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
 
     # plot
-    evals = pd.DataFrame(evals, columns=["scaled_set", "percentage", "mse", "mnd", "last_pred", "test_model",
+    evals = pd.DataFrame(evals, columns=["scaled_set", "percentage", "mse", "are", "last_pred", "test_model",
                                          "num_train_models", "smaller_model", "train_model_size", "popt"])
     evals["popt"] = evals["popt"].apply(np.asarray)
     # print(f"Mean guess: {evals.groupby('scaled_set')['popt'].mean()}")
     # print(f"Mean guess: {evals['popt'].mean()}")
-    print(f"models with max normalized distance: {evals.sort_values(by='mnd').dropna()[-10:]['scaled_set']}")
-    eval = "mnd"
+    print(f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['scaled_set']}")
+    eval = "are"
     plot_models_percentage_hist(evals, eval=eval, index="train_model_size", columns="percentage", fig_dir=fig_dir,
                                 show=show)
     plot_2popt(evals, poptx=0, popty=2, name="tokens", eval=eval, fig_dir=fig_dir, show=show,
@@ -567,9 +569,8 @@ def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_se
     xs = [popt[poptx] for popt in relevant["popt"]]
     ys = [popt[popty] for popt in relevant["popt"]]
     reg = LinearRegression().fit(np.array([xs]).T, np.array([ys]).T)
-    reg.coef_
-    reg.intercept_
-    print(reg.predict(np.array([[0, 1, 2, 3, 4, 5]]).T))
+    print(f"b = a*{reg.coef_}+{reg.intercept_} ")
+
     for marker in set(markers):
         x = [val for val, mar in zip(xs, markers) if mar == marker]
         y = [val for val, mar in zip(ys, markers) if mar == marker]
@@ -614,7 +615,7 @@ def remove_outlier_scales(df):
         ]
 
 
-def fill_nas(evals, eval, index, column):
+def fill_nas(evals, eval, index, column,verbose=False):
     column_vals = sorted(evals[column].unique())
     col_idxs = {val: i for i, val in enumerate(column_vals)}
 
@@ -635,7 +636,8 @@ def fill_nas(evals, eval, index, column):
                         col_val_to_eval[column_vals[replace_with_idx_after]]):
                     replace_with_idx_after += 1
                 if replace_with_idx_after >= len(column_vals):
-                    print(f"All row is na:{col_val_to_eval},{evals['scaled_set']},{evals[index]}, {evals}")
+                    if verbose:
+                        print(f"All row is na:{col_val_to_eval},{evals['scaled_set']},{evals[index]}, {evals}")
                     return row[eval]
                 replace_with_idx_before = col_idxs[row_col_val] - 1
                 while replace_with_idx_before > 0 and pd.isna(
@@ -696,7 +698,7 @@ def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
 def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
              at_least_loss=float("inf"),
              train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
-             abs_mnd=True,cut_beginning = 10 ** 10, fit_info: FitInfo = ChinchillaFit):
+             abs_are=True,cut_beginning = 10 ** 10, fit_info: FitInfo = ChinchillaFit):
     """
     Predict with each M models given x percentage of training the end of the last model's loss
     Args:
@@ -707,7 +709,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
         loss_types:
         at_least_loss:
         train_percentages:
-        abs_mnd:
+        abs_are:
 
     Returns:
 
@@ -717,11 +719,11 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
     os.makedirs(fig_dir, exist_ok=True)
 
-    cache_name = f"hist_fit_{abs_mnd}_" + LossType.join(loss_types, "_") + f"{fit_info.name}_cut{cut_beginning}"
+    cache_name = f"hist_fit_{abs_are}_" + LossType.join(loss_types, "_") + f"{fit_info.name}_cut{cut_beginning}"
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
-    resulting_cols = ["scaled_set", "percentage", "mse", "mnd", "last_pred", "test_model",
+    resulting_cols = ["scaled_set", "percentage", "mse", "are", "last_pred", "test_model",
                       "num_train_models", "largest_train_model", "flops", "popt"]
     for scaled_set in df["scaled_set"].unique():
         model_by_size = df.query("scaled_set==@scaled_set")[["model_name", "num_params"]].drop_duplicates().sort_values(
@@ -750,40 +752,17 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                     test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
                     flops = train_df["flops"].sum()
-                    if train_df.empty or test_df.empty:
-                        popt = None
-                    else:
-                        popt = fit(fit_info, train_df, train_df["perf"])
-                    if popt is None:
-                        mse = None
-                        mnd = None
-                        train_mnd = None
-                        predicted = None
-                    else:
-                        predicted = fit_info.func(test_df, *popt)
-                        mse = mean_squared_error(predicted, test_df["perf"])
-                        mnd = mean_normalized_distance(predicted, test_df["perf"], abs_mnd)
-                        predicted_train = fit_info.func(train_df, *popt)
-                        train_mnd = mean_normalized_distance(predicted_train, train_df["perf"], abs_mnd)
-                        if percentage > test_percentage:
-                            end_train_df = get_model_data(df=df, models=smaller_models.to_list()[:num_train_models],
-                                                          max_percentage=percentage,
-                                                          min_percentage=percentage - test_percentage)
-                            end_predicted_train = fit_info.func(end_train_df, *popt)
-                            end_train_mnd = mean_normalized_distance(end_predicted_train, end_train_df["perf"], abs_mnd)
-                            if np.abs(train_mnd - end_train_mnd) > 0.5:
-                                print(
-                                    f"{scaled_set} {percentage} {unique_model_sizes}: mnd "
-                                    f"on all train:{train_mnd} and only on the end:{end_train_mnd}")
+                    mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are=abs_are)
+
                     last_pred = predicted[-1] if predicted is not None else None
                     res = (
-                        scaled_set, percentage, mse, mnd, last_pred, largest_model, unique_model_sizes,
+                        scaled_set, percentage, mse, are, last_pred, largest_model, unique_model_sizes,
                         train_models[-1], flops,
                         tuple(popt) if popt is not None else None)
                     assert len(res) == len(
                         resulting_cols), "columns mismatch, ensure saved (res) and loaded (resulting_cols) values match"
                     cache[cache_id] = res
-                    print(f"{scaled_set} {percentage} {unique_model_sizes}: {mse}, {mnd}, {train_mnd}")
+                    print(f"{scaled_set} {percentage}% unique model sizes {unique_model_sizes}: mse {mse}, ARE {are}, train ARE{train_are}")
                 evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
@@ -793,14 +772,16 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     evals["popt"] = evals["popt"].apply(np.asarray)
     # print(f"Mean guess: {evals.groupby('scaled_set')['popt'].mean()}")
     # print(f"Mean guess: {evals['popt'].mean()}")
-    print(f"models with max normalized distance: {evals.sort_values(by='mnd').dropna()[-10:]['scaled_set']}")
-    eval = "mnd"
+    print(f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['scaled_set']}")
+    eval = "are"
     plot_models_percentage_hist(evals, eval=eval, fig_dir=fig_dir, show=show)
 
     metadata = get_per_model_metadata(df, "model_name")
     aggregate_hist(evals, eval=eval, fig_dir=fig_dir, show=show, metadata=metadata, vmin=0, vmax=0.35)
     aggregate_hist(evals, eval="flops", fig_dir=os.path.join(fig_dir, "flops"), show=show, metadata=metadata,
                    log_scale=True)
+    if evals["popt"].dropna().empty:
+        return
     if len(evals["popt"].dropna().iloc[0]) > 3:
         plot_2popt(evals, poptx=0, popty=3, name="scale", eval=eval, fig_dir=fig_dir, show=show,
                    metadata=get_per_model_metadata(df, "scaled_set"))
@@ -812,7 +793,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                    metadata=metadata)
 
     # # plot on all models
-    # for eval in ["mse", "mnd"]:
+    # for eval in ["mse", "are"]:
     #     plt.clf()
     #     for model in evals["model_name"].unique():
     #         subdf = evals.query("model_name==@model").dropna(subset=[eval])
@@ -851,11 +832,11 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     bins = np.percentile(evals["max_tokens"].unique(), np.linspace(20, 100, 5))
     evals["max_tokens_binned"] = np.digitize(evals["max_tokens"], bins)
 
-    eval = "mnd"
+    eval = "are"
     for col_group in ["max_tokens_binned", "original_paper", "data", "arch", "model_size", "model_type",
                       "best_loss_binned"]:
         plt.clf()
-        # mnds = evals.groupby([col_group, "percentage"])["mnd"].mean().reset_index([1])
+        # ares = evals.groupby([col_group, "percentage"])["are"].mean().reset_index([1])
         for group in evals[col_group].unique():
             subdf = evals.query(f"{col_group}==@group").dropna(subset=[eval])
             subdf = subdf.groupby(["percentage"])[eval].mean().reset_index()
@@ -865,19 +846,19 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
             y = subdf[eval]
             sns.lineplot(x=x.tolist(), y=y.tolist(), label=group)
 
-        if abs_mnd:
+        if abs_are:
             plt.ylim(bottom=0)
         plt.legend(bbox_to_anchor=(1.04, 1), borderaxespad=0, title=col_group)
         plt.xlabel("Percentage of Training Trajectory Available")
         plt.ylabel("Mean Normalized Distance")
         if fig_dir:
-            plt.savefig(os.path.join(fig_dir, f"perc-mnd_{eval}_{col_group}.png"), bbox_inches="tight")
+            plt.savefig(os.path.join(fig_dir, f"perc-are_{eval}_{col_group}.png"), bbox_inches="tight")
         if show:
             plt.show()
         plt.clf()
 
     # compare predictions to actual
-    eval = "mnd"
+    eval = "are"
     for col_group in [
         "original_paper"]:  # ["max_tokens_binned", "original_paper", "data", "arch", "model_size", "model_type", "best_loss_binned"]
         for group in evals[col_group].unique():

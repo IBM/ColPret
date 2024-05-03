@@ -6,7 +6,11 @@ import pandas as pd
 def to_str(num):
     try:
         num = float(num)
-        if num > 1e11:
+        if num > 1e17:
+            return f"{num / 1e18:.2f}E"
+        elif num > 1e14:
+            return f"{num / 1e15:.2f}P"
+        elif num > 1e11:
             return f"{num / 1e12:.2f}T"
         elif num > 1e8:
             return f"{num / 1e9:.2f}B"

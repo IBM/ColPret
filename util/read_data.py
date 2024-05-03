@@ -102,7 +102,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["arch"] = "enc-dec"
     df["flops"] = None
     df["epochs"] = 1
-    df["data"] = "pile-deduped"
+    df["data"] = "pile"
     df["model_type"] = "t5-pile"
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
@@ -189,6 +189,13 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
+
+    def switch_deduped(data_name):
+        if "pile-deduped" in data_name:
+            return "pile"
+        if "pile" == data_name:
+            return "pile-nodedup"
+        return data_name
 
     def row_to_tokens_seen(row):
         model_size = to_int(row["num_params"])
@@ -321,6 +328,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["original_paper"] = "pythia"
     df["domain"] = "LM"
     df["num_params"] = df["num_params"].apply(to_int)
+    df["data"] = df["data"].apply(switch_deduped)
     df = df.sort_values(by=["model_name", "steps"], ignore_index=True)
     df = df[df["tokens_seen"] != 0]
     df["seed"] = "0"
@@ -443,7 +451,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["loss_cols"] = df.apply(lambda row: [x for x in loss_columns if row[x]], axis=1)
     # df["loss_cols"] = df["loss_cols"].apply([x for x in df.columns if "plex" in x]) # chose to use validation loss
 
-    df["original_paper"] = "t5-pile"
+    df["original_paper"] = "ModuleFormer"
     df["domain"] = "LM"
     df["checkpoint"] = np.nan
     df["num_params"] = df["num_params"].apply(to_int)
@@ -470,20 +478,44 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["seed"] = "0"
 
     df["flops"] = None
-    # df["num_params"] = df["num_params"].apply(to_int)
-    # df = df.rename(columns={"token_num": "tokens_seen"})
-    # df["model_name"] = df.apply(lambda x: f"GPT2-{to_str(x['num_params'])}-{x['data']}-{to_str(x['epochs'])}",
-    #                             axis=1)
-    # df["scaled_set"] = df.apply(lambda x: f"GPT2-{x['data']}-{to_str(x['epochs'])}",
-    #                             axis=1)
-    # assert len(df["model_name"].unique()) == len(set((x for x in df["model_args"])))
-    # df["original_paper"] = "datablations"
-    # df["model_type"] = "GPT2"
-    # df["domain"] = "LM"
-    # df["arch"] = "dec"
-    # df["checkpoint"] = df["checkpoint"]  # note, more checkpoints exist for seeds of the 2B models
-    # df["loss_cols"] = [("loss",)] * len(df)
 
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
+
+    skipped = 0
+    models_seen = 0
+    numpy_dict = np.load("raw_data/loss_size_flops_llama_sh.npy", allow_pickle=True)
+    rows = []
+    for model, mod_dict in numpy_dict.tolist().items():
+        for flops, isoflop_dict in mod_dict.items():
+            for model_data in zip(*isoflop_dict.values()):
+                metadata = {key.lower(): val for key, val in zip(isoflop_dict.keys(), model_data)}
+                losses = metadata.pop("loss")
+                models_seen += 1
+                skip = False
+                for loss, cur_flops in zip(losses, np.linspace(0, float(flops), len(losses) + 1)[1:]):
+                    row = metadata.copy()
+                    row["loss"] = loss
+                    row["scaled_set"] = model
+                    row["flops"] = cur_flops
+                    row["max_flops"] = flops
+                    if row["size"] is None:
+                        skip = True
+                        continue
+                    rows.append(row)
+                skipped += skip
+    df = pd.DataFrame.from_records(rows)
+    df = df.rename(columns={"size": "num_params"})
+    df['original_paper'] = "MAD arxiv.org-2403.17844"
+    df['tokens_seen'] = df.apply(lambda row: row["flops"] / 6 / to_int(row["num_params"]), axis=1)
+    df['checkpoint'] = np.nan
+    df['epochs'] = 1
+    df["seed"] = "0"
+    df["arch"] = "dec"
+    df["model_name"] = df.apply(lambda row: f"{row['scaled_set']}_{to_str(row['num_params'])}_{to_str(row['max_flops'])}", axis=1)
+    df["model_type"] = df.apply(lambda row: row['scaled_set'].lower(), axis=1)
+    df["data"] = "pile"
+    df["loss_cols"] = [["loss"]] * len(df)
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
@@ -505,6 +537,14 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
+    """/**
+    * For the brave souls who get this far: You are the chosen ones,
+    * the valiant knights of programming who toil away, without rest,
+    * fixing our most awful code. To you, true saviors, kings of men,
+    * I say this: never gonna give you up, never gonna let you down,
+    * never gonna run around and desert you. Never gonna make you cry,
+    * never gonna say goodbye. Never gonna tell a lie and hurt you.
+    */"""
     df = pd.read_csv("raw_data/overtrain/overtrain.csv")
     df = df.rename(columns={"loss": "openLM_loss", "tokens": "tokens_seen", "name": "model_name"})
     df["loss_cols"] = [["train_loss"]] * len(df)
