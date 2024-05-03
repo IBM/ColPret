@@ -1,9 +1,12 @@
 import os
 
-from experiments.predict_with_size_or_number import closer_in_scale_is_predictive
+from experiments.minimal_cut import minimal_cut
+from experiments.predict_last import PredictBest, PredictLast
+from experiments.predict_with_size_or_number import closer_in_scale_is_predictive, larger_is_predictable, \
+    predict_smallest
 from fitting_funcs import MultFit, ChinchillaFit, PCAFit, Manual2Fit, ChinchillaTorchFit, ChinchillaTorchGuessFit
 from util.fit_utils import metric_per_column, get_perf_path, get_data_path, hist_fit, \
-    hist_one_model_fit, get_perf_df, LossType, get_per_model_metadata
+    hist_one_model_fit, get_perf_df, LossType, get_per_model_metadata, scale_fit_per_model
 from util.read_data import get_data
 
 if __name__ == '__main__':
@@ -50,18 +53,28 @@ if __name__ == '__main__':
     # df = df[df["original_paper"] == "pythia"]
     # df = df[df["domain"] == "LM"]
     abs_are = True
+    verbose=False
     fit_info = ChinchillaFit
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=10 ** 10)
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_no_cut"), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=0)
-    hist_one_model_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_1m"), at_least_loss=10, abs_are=abs_are)
-    # scale_fit_per_model(df, force=force, fig_dir=os.path.join(fig_dir, "per_model"), at_least_loss=10, abs_are=abs_are)
-    # minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
-    # predict_smallest(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
+    hist_one_model_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_1m"), at_least_loss=10, abs_are=abs_are,
+                       verbose=verbose)
+    scale_fit_per_model(df, force=force, fig_dir=os.path.join(fig_dir, "per_model"), at_least_loss=10, abs_are=abs_are)
+
+    minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
+    predict_smallest(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
     closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
                                   fit_info=fit_info)
-    # larger_is_predictable(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
+    larger_is_predictable(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_best_seen"), at_least_loss=10, abs_are=abs_are,
+             fit_info=PredictBest)
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "last"), at_least_loss=10, abs_are=abs_are,
+             fit_info=PredictLast, verbose=True)
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "best"), at_least_loss=10, abs_are=abs_are,
+             fit_info=PredictBest, verbose=True)
+
     # # fit_on_smaller(df,force)
     # # scaling_scaling_law(df, force)
     # # cross_validate(df,force)

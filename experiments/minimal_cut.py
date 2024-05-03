@@ -1,24 +1,23 @@
 import os
 
-import numpy as np
 import pandas as pd
 
-from util.fit_utils import plot_models_percentage_hist, mean_normalized_distance, fit, get_model_data, get_perf_df, \
-    metric_per_column, get_perf_path, get_data_path, single_scaling
 from fitting_funcs import ChinchillaFit
 from util.cache import save_cache, get_cache
+from util.fit_utils import plot_models_percentage_hist, get_model_data, get_perf_df, \
+    metric_per_column, get_perf_path, get_data_path, single_scaling, LossType
 from util.read_data import get_data
 
 
 def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), at_least_loss=float("inf"),
-                minimal_cuts=(0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99), abs_are=True):
+                minimal_cuts=(0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99), abs_are=True, fit_info=ChinchillaFit):
     cut_beginning = 10 ** 10
-    fit_info = ChinchillaFit
+
     test_percentage = 0.7
     experiment_name = "minimal_cut"
     fig_dir = os.path.join(fig_dir, experiment_name)
     os.makedirs(fig_dir, exist_ok=True)
-    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types)
+    cache_name = experiment_name + "_" + str(abs_are) + "_".join(loss_types) + "_" + fit_info.name
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -46,7 +45,7 @@ def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), 
                     test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
 
-                    mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info,abs_are=abs_are)
+                    mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are=abs_are)
                     last_pred = predicted[-1] if predicted is not None else None
                     res = (scaled_set, min_percentage, mse, are, last_pred, largest_model, num_train_models + 1,
                            tuple(popt) if popt is not None else None)
@@ -82,7 +81,7 @@ if __name__ == '__main__':
     cache_dir = '/Users/lc/PycharmProjects/CLPR/cache/'
     data_path = get_data_path(cache_dir)
 
-    loss_types = ("perp", "loss")
+    loss_types = (LossType.PERP, LossType.LOSS)
     perf_path = get_perf_path(cache_dir, loss_types)
     df = get_perf_df(get_data(save_in=data_path, force=force), loss_types, save_in=perf_path, force=force)
     force = True

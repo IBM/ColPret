@@ -73,6 +73,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df = df.rename(columns={"Model Size": "num_params", "steps": "tokens_seen", "Training FLOP": "flops"})
     df = df.drop(columns=["x", "y", "color", "hex_color"])
     df["num_params"] = df["num_params"].apply(int)
+    df["num_params"] = df["num_params"].apply(lambda size: round(size, -7))
     df["model_name"] = df["num_params"].apply(lambda x: f"chin{x}")
     df["tokens_seen"] = df.apply(lambda row: row["flops"] / 6 / to_int(row["num_params"]), axis=1)
     df = df[df["tokens_seen"] != 0]

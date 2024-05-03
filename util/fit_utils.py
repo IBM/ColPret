@@ -50,7 +50,7 @@ class LossType(Enum):
         return sep.join([x.value for x in loss_types])
 
 
-def single_scaling(train_df, test_df, fit_info, abs_are):
+def single_scaling(train_df, test_df, fit_info, abs_are, verbose=False):
     if train_df.empty or test_df.empty:
         popt = None
     else:
@@ -63,7 +63,6 @@ def single_scaling(train_df, test_df, fit_info, abs_are):
     if not (popt is None or all(pd.isna(popt))):
         predicted = fit_info.func(test_df, *popt)
         if not all(pd.isna(predicted)):
-            predicted = fit_info.func(test_df, *popt)
             mse = mean_squared_error(predicted, test_df["perf"])
             are = mean_normalized_distance(predicted, test_df["perf"], abs_are)
             predicted_train = fit_info.func(train_df, *popt)
@@ -114,8 +113,8 @@ def fit(fit_info: FitInfo, metadata, perf, default=None):
             popt, pcov = fit_info.fit_func(fit_info.func, metadata, perf, p0=fit_info.guess, bounds=fit_info.bounds)
         except RuntimeError as e:
             popt, pcov = fit_info.fit_func(fit_info.func, metadata, perf, p0=fit_info.guess,
-                                   method='dogbox',
-                                   bounds=fit_info.bounds)  # not sure who of the three is best (lm can only be used without bounds)
+                                           method='dogbox',
+                                           bounds=fit_info.bounds)  # not sure who of the three is best (lm can only be used without bounds)
             print(
                 f"Was hard to fit, are some of the diagonal variances very high? This might indicate redundant parameters:{np.diag(pcov)}")
     except AssertionError as e:
@@ -434,13 +433,13 @@ def mean_normalized_distance(predicted, target, abs):
 
 def plot_models_percentage_hist(evals, eval, fig_dir, iterate_over="scaled_set", index="num_train_models",
                                 columns="percentage", vmin=0, vmax=1, min_rows=2,
-                                show=False):
+                                show=False, verbose=False):
     for scaled_set in evals[iterate_over].unique():
         subdf = evals.query(f"@{iterate_over}=={iterate_over}")
         plot_heatmap(evals=subdf, eval=eval, fig_dir=fig_dir, show=show,
                      title=scaled_set,
                      fig_name=f"hist-perc-{eval}_{scaled_set}.png", column=columns, index=index, vmin=vmin, vmax=vmax,
-                     min_rows=min_rows)
+                     min_rows=min_rows, verbose=verbose)
         # plt.title(scaled_set)
         # sns.heatmap(100 * pivot, annot=True, vmin=100 * vmin, vmax=100 * vmax)
         # if fig_dir:
@@ -472,7 +471,7 @@ def opts_explained(evals, eval, fig_dir, iterate_over="scaled_set", index="num_t
 def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
                        at_least_loss=float("inf"),
                        train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
-                       abs_are=True):
+                       abs_are=True, verbose=False):
     cut_beginning = 10 ** 10
     fit_info = bound_params(ChinchillaFit, [6.255414, None, None, 0.3526596])
     # fit_info = Chinchilla1ModelFit
@@ -510,29 +509,17 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
                                               min_tokens=cut_beginning)
                     test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
-                    # replaced by single_scaling
-                    # if train_df.empty or test_df.empty:
-                    #     popt = None
-                    # else:
-                    #     popt = fit(fit_info, train_df, train_df["perf"])
-                    # if popt is None:
-                    #     mse = None
-                    #     are = None
-                    #     train_are = None
-                    #     predicted = None
-                    # else:
-                    #     predicted = fit_info.func(test_df, *popt)
-                    #     mse = mean_squared_error(predicted, test_df["perf"])
-                    #     are = mean_normalized_distance(predicted, test_df["perf"], abs_are)
-                    #     predicted_train = fit_info.func(train_df, *popt)
-                    #     train_are = mean_normalized_distance(predicted_train, train_df["perf"], abs_are)
+                    # unique_model_sizes = num_model + 1
+                    unique_model_sizes = nunique_model_size(train_df)
                     mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are=abs_are)
                     last_pred = predicted[-1] if predicted is not None else None
-                    res = (scaled_set, percentage, mse, are, last_pred, largest_model, num_model + 1, current_model,
-                           train_model_size,
-                           tuple(popt) if popt is not None else None)
+                    res = (
+                        scaled_set, percentage, mse, are, last_pred, largest_model, unique_model_sizes, current_model,
+                        train_model_size,
+                        tuple(popt) if popt is not None else None)
                     cache[cache_id] = res
-                    print(f"{scaled_set} on {percentage}% and {num_model} models: MSE {mse}, ARE {are}, training ARE {train_are}")
+                    print(
+                        f"{scaled_set} on {100 * percentage}% and {num_model} models: MSE {mse}, ARE {are}, training ARE {train_are}")
                 evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
@@ -546,7 +533,7 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
     print(f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['scaled_set']}")
     eval = "are"
     plot_models_percentage_hist(evals, eval=eval, index="train_model_size", columns="percentage", fig_dir=fig_dir,
-                                show=show)
+                                show=show, verbose=verbose)
     plot_2popt(evals, poptx=0, popty=2, name="tokens", eval=eval, fig_dir=fig_dir, show=show,
                metadata=get_per_model_metadata(df, "scaled_set"))
     opts_explained(evals, eval=eval, fig_dir=fig_dir, show=show,
@@ -587,11 +574,15 @@ def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_se
 def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
                  index: str = "num_train_models",
                  column: str = "percentage", vmin: float = 0, vmax: float = 1, min_rows: int = None,
-                 ascending_index: bool = True, annot: bool = True, log_scale: bool = False):
+                 ascending_index: bool = True, annot: bool = True, log_scale: bool = False, verbose=False):
+    evals = evals.drop_duplicates(subset=[index, column])
+    if evals.empty:
+        return
     pivot = evals.pivot(index=index, columns=column, values=eval)
     pivot = pivot.sort_values(index, ascending=ascending_index)
     if min_rows and len(pivot.dropna(axis=0, how='all')) < min_rows:
-        print(f"Skipping {title}, no different scales of smaller models {pivot}")
+        if verbose:
+            print(f"Skipping {title}, no different scales of smaller models {pivot}")
         return
     if title:
         plt.title(title)
@@ -615,16 +606,21 @@ def remove_outlier_scales(df):
         ]
 
 
-def fill_nas(evals, eval, index, column,verbose=False):
+def fill_nas(evals, eval, index, column, verbose=False):
+    if evals.empty:
+        return evals
+
     column_vals = sorted(evals[column].unique())
     col_idxs = {val: i for i, val in enumerate(column_vals)}
 
     def fill(row):
         if pd.isna(row[eval]):
             row_col_val = row[column]
-            if pd.isna(row[index]):
+            if pd.isna(row[index]) and verbose:
                 print(f"Empty index:{index} in {row}")
             equivalents = evals[(evals["scaled_set"] == row['scaled_set']) & (row[index] == evals[index])]
+            if equivalents.empty:
+                return row[eval]
             col_val_to_eval = equivalents.groupby(column)[eval].mean().to_dict()
             if pd.notna(col_val_to_eval[column_vals[col_idxs[row_col_val]]]):  # there are duplicates of this status
                 row[eval] = col_val_to_eval[column_vals[col_idxs[row_col_val]]]
@@ -695,10 +691,25 @@ def aggregate_hist(evals, eval, fig_dir, show, metadata=None,
                  annot=True)
 
 
+def nunique_model_size(df) -> int:
+    return len(unique_model_size(df))
+
+
+def unique_model_size(df) -> List[int]:
+    max_training_steps = df.groupby(["num_params"])["perf"].count().mean()
+    model_sizes = df["num_params"]
+    if model_sizes.dropna().empty:
+        return []
+    if max_training_steps > 5:  # heuristic to separate checkpoints and training runs from 1 point per model (ee.g. because mode sizes are extracted and hence noisy)
+        model_sizes = [round(size, -6) for size in model_sizes]
+    unique_model_sizes = np.unique(model_sizes)
+    return unique_model_sizes
+
+
 def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PERP, LossType.LOSS),
              at_least_loss=float("inf"),
              train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
-             abs_are=True,cut_beginning = 10 ** 10, fit_info: FitInfo = ChinchillaFit):
+             abs_are=True, cut_beginning=10 ** 10, fit_info: FitInfo = ChinchillaFit, verbose=False):
     """
     Predict with each M models given x percentage of training the end of the last model's loss
     Args:
@@ -740,29 +751,29 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                 if not force and cache_id in cache:
                     res = cache[cache_id]
                     assert len(res) == len(resulting_cols), "columns mismatch, clean cache"
-
                 else:
                     train_models = smaller_models.to_list()[:num_train_models]
-                    model_sizes = df[df["model_name"].isin(train_models)]["num_params"]
-                    model_sizes = [round(size, -6) for size in model_sizes]
-                    unique_model_sizes = len(np.unique(model_sizes))
                     train_df = get_model_data(df=df, models=train_models,
                                               max_percentage=percentage,
                                               min_tokens=cut_beginning)
                     test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
+                    unique_model_sizes = nunique_model_size(train_df)
                     flops = train_df["flops"].sum()
-                    mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are=abs_are)
+                    mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are=abs_are,
+                                                                          verbose=verbose)
 
                     last_pred = predicted[-1] if predicted is not None else None
                     res = (
                         scaled_set, percentage, mse, are, last_pred, largest_model, unique_model_sizes,
                         train_models[-1], flops,
                         tuple(popt) if popt is not None else None)
+                    if verbose:
+                        print(
+                            f"{scaled_set} {100 * percentage}% unique model sizes {unique_model_sizes}: mse {mse}, ARE {are}, train ARE{train_are}, popts {popt} predicted {np.mean(predicted) if predicted is not None else ''} actual {test_df['perf'].mean()}")
                     assert len(res) == len(
                         resulting_cols), "columns mismatch, ensure saved (res) and loaded (resulting_cols) values match"
                     cache[cache_id] = res
-                    print(f"{scaled_set} {percentage}% unique model sizes {unique_model_sizes}: mse {mse}, ARE {are}, train ARE{train_are}")
                 evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
@@ -866,6 +877,8 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                 # if "pythi" in group and "pythia-1.4b" not in model:
                 #     continue
                 subdf = df.query("model_name==@model & tokens_seen>=@cut_beginning")
+                if subdf.empty:
+                    continue
                 ax = sns.lineplot(x=subdf["tokens_seen"], y=subdf["perf"], label=f"{group} {model}")
                 color = ax.lines[-1].get_color()
                 subdf = evals.query("model_name==@model")
