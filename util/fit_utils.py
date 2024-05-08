@@ -788,6 +788,13 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     plot_models_percentage_hist(evals, eval=eval, fig_dir=fig_dir, show=show)
 
     metadata = get_per_model_metadata(df, "model_name")
+    subfig_dir = os.path.join(fig_dir, "agg_hist_per_model_type")
+    for model_type in metadata.unique():
+        sub_evals = evals[evals["model_name"].apply(lambda x: metadata[x] == model_type)]
+        aggregate_hist(sub_evals, eval=eval, fig_dir=os.path.join(subfig_dir, f"{model_type}"), show=show,
+                       metadata=metadata, vmin=0, vmax=0.35)
+        aggregate_hist(sub_evals, eval="flops", fig_dir=os.path.join(subfig_dir, f"flops_{model_type}"), show=show,
+                       metadata=metadata, log_scale=True)
     aggregate_hist(evals, eval=eval, fig_dir=fig_dir, show=show, metadata=metadata, vmin=0, vmax=0.35)
     aggregate_hist(evals, eval="flops", fig_dir=os.path.join(fig_dir, "flops"), show=show, metadata=metadata,
                    log_scale=True)
