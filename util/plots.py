@@ -8,16 +8,26 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def capitalize_fig(fig=None):
-    if fig is None:
+def capitalize_fig(fig=None, ax=None):
+    if fig is None and ax is None:
         fig = plt.gcf()
-    xlabel = fig.axes[0].get_xlabel()
-    ylabel = fig.axes[0].get_ylabel()
-    title = fig.axes[0].get_title()
-    fig.axes[0].set_xlabel(xlabel.capitalize())
-    fig.axes[0].set_ylabel(ylabel.capitalize())
-    fig.axes[0].set_title(title.capitalize())
+    if ax is None:
+        try:
+            fig = fig[0]
+        except Exception as e:
+            pass
+        try:
+            ax = fig.axes[0]
+        except Exception as e:
+            ax = fig.axes
+    xlabel = ax.get_xlabel()
+    ylabel = ax.get_ylabel()
+    title = ax.get_title()
+    ax.set_xlabel(xlabel.capitalize())
+    ax.set_ylabel(ylabel.capitalize())
+    ax.set_title(title.capitalize())
     return fig
+
 
 def plot_pred_actual_compare(metadata, preds=None, perfs=None, show=False):
     # compare predictions to actual
@@ -38,10 +48,11 @@ def plot_pred_actual_compare(metadata, preds=None, perfs=None, show=False):
 
         x = sub_data["tokens_seen"]
         model_name = sub_data['model_name'].iloc[0]
-        assert len(sub_data['model_name'].unique()) == 1, f"assumes one model was given in this dataframe, got {len(sub_data['model_name'].unique())}"
+        assert len(sub_data[
+                       'model_name'].unique()) == 1, f"assumes one model was given in this dataframe, got {len(sub_data['model_name'].unique())}"
         ax = sns.lineplot(x=x, y=perf, label=f"{model_name}")
         color = ax.lines[-1].get_color()
-        sns.lineplot(x=x, y=pred, color=color, #label=f"predicted {model_name}",
+        sns.lineplot(x=x, y=pred, color=color,  # label=f"predicted {model_name}",
                      linestyle='dashed')
         in_fit = sub_data[sub_data["in_fit"] == True]
         if in_fit.empty:

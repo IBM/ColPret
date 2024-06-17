@@ -1,0 +1,20 @@
+{
+    "train_domain_weights": {
+        "RedPajamaArXiv": 0.04580708,
+        "RedPajamaBook": 0.04202635,
+        "RedPajamaC4": 0.26601558,
+        "RedPajamaCommonCrawl": 0.52030249,
+        "RedPajamaGithub": 0.05220404,
+        "RedPajamaStackExchange": 0.03370492,
+        "RedPajamaWikipedia": 0.03993954
+    },
+    "eval_domain_weights": {
+        "RedPajamaArXiv": 0.04580708,
+        "RedPajamaBook": 0.04202635,
+        "RedPajamaC4": 0.26601558,
+        "RedPajamaCommonCrawl": 0.52030249,
+        "RedPajamaGithub": 0.05220404,
+        "RedPajamaStackExchange": 0.03370492,
+        "RedPajamaWikipedia": 0.03993954
+    }
+}
