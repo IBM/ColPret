@@ -11,8 +11,8 @@ from util.read_data import get_data
 
 if __name__ == '__main__':
     # acquire data
-    force = False
     force = True
+    force = False
     cache_dir = '/Users/lc/PycharmProjects/CLPR/cache/'
     data_path = get_data_path(cache_dir)
 
@@ -22,23 +22,7 @@ if __name__ == '__main__':
     df = get_perf_df(all_df, loss_types, save_in=perf_path, force=force)
     metadata = get_per_model_metadata(df)
 
-    #### fit
-
-    # fit with torch
-    force = True
-    force = False
-    abs_are = True
-    fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/torch_fit'
-    fit_func = ChinchillaTorchFit
-    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
-             fit_info=fit_func)
-    force = True
-    force = False
-    abs_are = True
-    fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/torch_guess_fit'
-    fit_func = ChinchillaTorchGuessFit
-    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
-             fit_info=fit_func)
+    # fit
 
     # chinchila based (datablation guesses)
     force = True
@@ -53,7 +37,7 @@ if __name__ == '__main__':
     # df = df[df["original_paper"] == "pythia"]
     # df = df[df["domain"] == "LM"]
     abs_are = True
-    verbose=False
+    verbose = False
     fit_info = ChinchillaFit
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=10 ** 10)
@@ -61,13 +45,19 @@ if __name__ == '__main__':
              fit_info=fit_info, cut_beginning=0)
     hist_one_model_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_1m"), at_least_loss=10, abs_are=abs_are,
                        verbose=verbose)
-    scale_fit_per_model(df, force=force, fig_dir=os.path.join(fig_dir, "per_model"), at_least_loss=10, abs_are=abs_are)
+    scale_fit_per_model(df, force=force, fig_dir=os.path.join(
+        fig_dir, "per_model"), at_least_loss=10, abs_are=abs_are)
 
-    minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
-    predict_smallest(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
     closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
-                                  fit_info=fit_info)
-    larger_is_predictable(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
+                                  fit_info=fit_info, num_train_models=3)
+    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
+                                  fit_info=fit_info, num_train_models=4)
+    minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10,
+                abs_are=abs_are, fit_info=fit_info)
+    predict_smallest(df, force=force, fig_dir=fig_dir,
+                     at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
+    larger_is_predictable(df, force=force, fig_dir=fig_dir,
+                          at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_best_seen"), at_least_loss=10, abs_are=abs_are,
              fit_info=PredictBest)
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "last"), at_least_loss=10, abs_are=abs_are,
@@ -79,6 +69,22 @@ if __name__ == '__main__':
     # # scaling_scaling_law(df, force)
     # # cross_validate(df,force)
     #
+
+    # fit with torch
+    force = False
+    force = True
+    abs_are = True
+    fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/torch_fit'
+    fit_func = ChinchillaTorchFit
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
+             fit_info=fit_func)
+    force = False
+    force = True
+    abs_are = True
+    fig_dir = '/Users/lc/PycharmProjects/CLPR/figs/torch_guess_fit'
+    fit_func = ChinchillaTorchGuessFit
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
+             fit_info=fit_func)
 
     # keep the connection between a,alpha and b,beta constant (or more specifically use the PCA)
     force = True

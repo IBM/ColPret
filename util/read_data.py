@@ -86,6 +86,74 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     res = pd.concat(dfs)
     res["loss_cols"] = res["loss_cols"].apply(tuple)
 
+    df = pd.read_csv("raw_data/overtrain/overtrain.csv")
+    df = df.rename(columns={"loss": "openLM_loss", "tokens": "tokens_seen", "name": "model_name"})
+    df["loss_cols"] = [["train_loss"]] * len(df)
+    name_to_params = {
+        "d=96_l=8_h=4": "0.011B",
+        "d=512_l=8_h=4": "0.079B",
+        "d=576_l=24_h=8": "0.154B",
+        "d=1024_l=24_h=8": "0.411B",
+        "open_lm_1b": "1.4B",
+        "open_lm_7b": "6.9B",
+    }
+    data_to_name = {
+        "c4_original": "C4",
+        "pile": "Pile",
+        "rpj": "RedPajama",
+        "rw_original": "RefinedWeb",
+    }
+
+    def data_from_name(name):
+        for key, val in data_to_name.items():
+            if key in name:
+                return val
+        raise ValueError
+
+    def params_from_name(name):
+        for key, val in name_to_params.items():
+            if key in name:
+                return val
+        raise ValueError
+
+    df["num_params"] = df["model_name"].apply(params_from_name).apply(to_int)
+    df["data"] = df["model_name"].apply(data_from_name)
+    df["model_type"] = "overtrain"
+    df['arch'] = "dec"
+    df["loss_cols"] = [["openLM_loss"]] * len(df)
+    df['flops'] = np.nan
+
+    downstream_df = pd.read_csv("raw_data/overtrain/overtrain_downstreams.csv", index_col=0)
+    downstream_df = downstream_df.rename(columns={"loss_openlm": "openLM_loss"})
+    downstream_df["num_params"] = downstream_df["name"].apply(params_from_name).apply(to_int)
+    downstream_df["tokens_seen"] = downstream_df.apply(lambda row: float(row["flops"]) / 6 / to_int(row["num_params"]),
+                                                       axis=1)
+    idxs = df.groupby(["model_name"])["openLM_loss"].idxmin().to_dict()
+    downstream_df.index = [idxs.get(name, name) for name in downstream_df["name"]]
+    downstream_df = downstream_df.drop(columns=["model_name", "color", "D", "N"])
+    downstream_df = downstream_df.rename(columns={"name": "model_name"})
+    downstream_df.columns = [col.replace("err", "acc") for col in downstream_df.columns]
+    df = df.combine_first(downstream_df).reset_index(drop=True)
+    loss_cols = [col for col in df.columns if "loss" in col or "acc" in col]
+    df["loss_cols"] = df.apply(lambda row: tuple(col for col in loss_cols if pd.notna(row[col])), axis=1)
+
+    max_tokens = df.groupby(["model_name"])["tokens_seen"].max().to_dict()
+    df['checkpoint'] = df.apply(
+        lambda row: f"https://huggingface.co/mlfoundations/scaling/tree/main/{row['model_name']}/checkpoints" if
+        max_tokens[row["model_name"]] == row["tokens_seen"] else np.nan, axis=1)
+    df['epochs'] = 1
+    df['original_paper'] = "overtrain" # arxiv.org/abs/2403.08540
+    df["scaled_set"] = df.apply(lambda x: f"overtrain-{x['data']}", axis=1)
+    df["compute_opt"] = df["model_name"].apply(lambda x: float(x.split("-")[-1]))
+    compute_opt_per_model = df.groupby(["scaled_set", "num_params"])["compute_opt"].max().to_dict()
+    df["scaled_set"] = df.apply(
+        lambda row: row["scaled_set"] if compute_opt_per_model[(row["scaled_set"], row["num_params"])] == row[
+            "compute_opt"] else np.nan, axis=1)
+    df["seed"] = "0"
+
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
+
     df = pd.read_csv("aggregated_eval/T5_pile.csv")
     df["checkpoint"] = df.apply(
         lambda row: hf_checkpoint(f"EleutherAI/pile-t5-{row['model_name']}", f"step_{row['steps']}"), axis=1)
@@ -513,7 +581,8 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df['epochs'] = 1
     df["seed"] = "0"
     df["arch"] = "dec"
-    df["model_name"] = df.apply(lambda row: f"{row['scaled_set']}_{to_str(row['num_params'])}_{to_str(row['max_flops'])}", axis=1)
+    df["model_name"] = df.apply(
+        lambda row: f"{row['scaled_set']}_{to_str(row['num_params'])}_{to_str(row['max_flops'])}", axis=1)
     df["model_type"] = df.apply(lambda row: row['scaled_set'].lower(), axis=1)
     df["data"] = "pile"
     df["loss_cols"] = [["loss"]] * len(df)
@@ -534,90 +603,6 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df['original_paper'] = "blog-redpajama-7b"
     df["scaled_set"] = "redPajama"
     df["seed"] = "0"
-
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
-
-    """/**
-    * For the brave souls who get this far: You are the chosen ones,
-    * the valiant knights of programming who toil away, without rest,
-    * fixing our most awful code. To you, true saviors, kings of men,
-    * I say this: never gonna give you up, never gonna let you down,
-    * never gonna run around and desert you. Never gonna make you cry,
-    * never gonna say goodbye. Never gonna tell a lie and hurt you.
-    */"""
-    df = pd.read_csv("raw_data/overtrain/overtrain.csv")
-    df = df.rename(columns={"loss": "openLM_loss", "tokens": "tokens_seen", "name": "model_name"})
-    df["loss_cols"] = [["train_loss"]] * len(df)
-    name_to_params = {
-        "d=96_l=8_h=4": "0.011B",
-        "d=512_l=8_h=4": "0.079B",
-        "d=576_l=24_h=8": "0.154B",
-        "d=1024_l=24_h=8": "0.411B",
-        "open_lm_1b": "1.4B",
-        "open_lm_7b": "6.9B",
-    }
-    data_to_name = {
-        "c4_original": "C4",
-        "pile": "Pile",
-        "rpj": "RedPajama",
-        "rw_original": "RefinedWeb",
-    }
-
-    def data_from_name(name):
-        for key, val in data_to_name.items():
-            if key in name:
-                return val
-        raise ValueError
-
-    def params_from_name(name):
-        for key, val in name_to_params.items():
-            if key in name:
-                return val
-        raise ValueError
-
-    # def loss_to_rows(loss_str):
-    #     lines = loss_str.split("\n")
-    #     tokens = []
-    #     losses = []
-    #     for line in lines:
-    #         if not line[0].isnumeric():
-    #             continue
-    #         token, loss = re.split("\s+", line)
-    #         tokens.append(token)
-    #         losses.append(loss)
-    #     return list(zip(tokens, losses))
-
-    # df["tmp"] = df["loss"].apply(loss_to_rows)
-    # df = df.explode("tmp", ignore_index=True)
-    # df[["token", "loss"]] = df["tmp"].tolist()
-    df["num_params"] = df["model_name"].apply(params_from_name).apply(to_int)
-    df["data"] = df["model_name"].apply(data_from_name)
-    df["model_type"] = "overtrain"
-    df['arch'] = "dec"
-    df["loss_cols"] = [["openLM_loss"]] * len(df)
-    df['flops'] = np.nan
-    max_tokens = df.groupby(["model_name"])["tokens_seen"].max().to_dict()
-    df['checkpoint'] = df.apply(
-        lambda row: f"https://huggingface.co/mlfoundations/scaling/tree/main/{row['model_name']}/checkpoints" if
-        max_tokens[row["model_name"]] == row["tokens_seen"] else np.nan, axis=1)
-    df['epochs'] = 1
-    df['original_paper'] = "overtrain"
-    df["scaled_set"] = df.apply(lambda x: f"overtrain-{x['data']}",
-                                axis=1)
-    df["compute_opt"] = df["model_name"].apply(lambda x: float(x.split("-")[-1]))
-    compute_opt_per_model = df.groupby(["scaled_set", "num_params"])["compute_opt"].max().to_dict()
-    df["scaled_set"] = df.apply(
-        lambda row: row["scaled_set"] if compute_opt_per_model[(row["scaled_set"], row["num_params"])] == row[
-            "compute_opt"] else np.nan,
-        axis=1)
-    df["seed"] = "0"
-    # from util.fit_utils import LossType
-    # loss_types = (LossType.PERP, LossType.LOSS)
-    # from fit import get_perf_df
-    # a = get_perf_df(df, loss_types)
-    # print(a.groupby("model_name")["perf"].min().to_dict())
-    # df["tokens_seen"] = pd.to_numeric(df["tokens_seen"].apply(lambda x: int(x * 1e9)))
 
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
@@ -674,7 +659,6 @@ if __name__ == '__main__':
 # ModuleFormer MOE (https://arxiv.org/abs/2306.04640) (LLMs -0shot.csv) from https://docs.google.com/spreadsheets/d/1b_Em7HVESSExXCPvssJT7El5zc43KvysDJFJqVNM5jE/edit?usp=sharing
 # overtrain: Language models scale reliably with over-training and on downstream tasks https://arxiv.org/abs/2403.08540 https://github.com/mlfoundations/scaling/blob/a003c4913793ac2ae7ef87b28ecb562955d026d5/scaling/constants.py#L139-L146
 # TODO
-# extract overtrain downstream losses (rest is in)
 # Some granite training data: https://watsonx-data.cash.sl.cloud9.ibm.com/models/detail/5
 # granite logs? https://ibm-research.slack.com/archives/C049F4GK05T/p1702911455907359?thread_ts=1702910609.328829&cid=C049F4GK05T
 # ConvNets match https://arxiv.org/pdf/2310.16764.pdf
