@@ -965,6 +965,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
              at_least_loss=float("inf"),
              train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5,
                                 0.6, 0.7, 0.8, 0.9, 1),
+             choose_models: Callable = None, experiment_name="",
              abs_are=True, cut_beginning=10 ** 10, fit_info: FitInfo = ChinchillaFit, verbose=False):
     """
     Predict with each M models given x percentage of training the end of the last model's loss
@@ -982,12 +983,17 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
     """
 
+    if choose_models is None:
+        choose_models = lambda train_models, num_train_models, **kwargs: train_models[
+            :num_train_models]
+    else:
+        assert experiment_name, "If non-standard experiment is done (e.g., choosing models not by default), and experiment name must be provided for caching."
     test_percentage = 0.7
 
     os.makedirs(fig_dir, exist_ok=True)
 
     cache_name = f"hist_fit_{abs_are}_" + LossType.join(
-        loss_types, "_") + f"{fit_info.name}_cut{cut_beginning}"
+        loss_types, "_") + f"{fit_info.name}_cut{cut_beginning}_{experiment_name}"
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -1008,7 +1014,8 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                     assert len(res) == len(
                         resulting_cols), "columns mismatch, clean cache"
                 else:
-                    train_models = smaller_models.to_list()[:num_train_models]
+                    train_models = list(choose_models(
+                        smaller_models, num_train_models))
                     train_df = get_model_data(df=df, models=train_models,
                                               max_percentage=percentage,
                                               min_tokens=cut_beginning)
