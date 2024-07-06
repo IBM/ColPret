@@ -136,8 +136,7 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
     # sub_evals = evals.loc[:, ["scaled_set",
     #                           "are", "#Train models", "num_params"]]
     plot_models_percentage_hist(evals, eval="are", iterate_over="scaled_set", index="num_params",
-                                columns="percentage", fig_dir=fig_dir,
-                                min_rows=1, show=show)
+                                columns="percentage", fig_dir=fig_dir,                                min_rows=1, show=show)
 
     # scaled_set_metadata = get_per_model_metadata(df, "scaled_set")
     # model_name_metadata = get_per_model_metadata(df, "model_name")

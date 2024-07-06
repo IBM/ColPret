@@ -19,6 +19,11 @@ ARCH_AWARE_DF_COLS = BASIC_DF_COLS + ["arch"]
 ARCHS = ["dec", "enc", "enc-dec", "moe", "ssm", np.nan]
 
 
+def test_dfs(dfs, relevant_cols, supress_zero_tokens=False):
+    for df in dfs:
+        test_df(df, relevant_cols, supress_zero_tokens)
+
+
 def test_df(df, relevant_cols, supress_zero_tokens=False):
     relevant_cols = set(relevant_cols)
     assert all(col in df.columns for col in
@@ -45,29 +50,30 @@ def hf_checkpoint(name, revision):
 
 
 def get_bimix():
-    with open("raw_data/bimix-law/Pile/ppls.pkl", "rb") as ppl_fl:
-        ppls = pickle.load(ppl_fl)
-    with open("raw_data/bimix-law/Pile/ratios.pkl", "rb") as ratio_fl:
-        ratios = pickle.load(ratio_fl)
     dfs = []
-    for data_name, df in ppls.items():
-        if data_name == "Baseline":
-            new_data_name = "Pile&SlimPajam"
-        else:
-            new_data_name = data_name + "_mix"
-        df.columns = [x+"_ppl" if x !=
-                      "global_step" else x for x in df.columns]
-        df["data"] = new_data_name
-        df["model_name"] = new_data_name
-        df["model_type"] = "DoReMi"
-        df["checkpoint"] = np.nan
-        # scaled in the sense of data ratio not size
-        df["scaled_set"] = df["model_name"]
-        for ratio in ratios[data_name].index:
-            df[ratio+"_data_ratio"] = ratios[data_name][ratio]
-        dfs.append(df)
+    for dataset in ["Pile", "SlimPajama"]:
+        with open(f"raw_data/bimix-law/{dataset}/ppls.pkl", "rb") as ppl_fl:
+            ppls = pickle.load(ppl_fl)
+        with open(f"raw_data/bimix-law/{dataset}/ratios.pkl", "rb") as ratio_fl:
+            ratios = pickle.load(ratio_fl)
+        for data_name, df in ppls.items():
+            if data_name == "Baseline":
+                new_data_name = dataset
+            else:
+                new_data_name = dataset+"_"+data_name + "_mix"
+            df.columns = [x+"_ppl" if x !=
+                          "global_step" else x for x in df.columns]
+            df["data"] = new_data_name
+            df["model_name"] = new_data_name
+            df["model_type"] = "DoReMi"
+            df["checkpoint"] = np.nan
+            # scaled in the sense of data ratio not size
+            df["scaled_set"] = df["model_name"]
+            for ratio in ratios[data_name].index:
+                df[ratio+"_data_ratio"] = ratios[data_name][ratio]
+            dfs.append(df)
     df = pd.concat(dfs)
-    df["original_paper"] = "DataMixing arxiv.org/pdf/2405.14908"
+    df["original_paper"] = "DataMixing arxiv.org/abs/2405.14908"
     df = df.rename(columns={"global_step": "tokens_seen"})
     df["tokens_seen"] = df["tokens_seen"] * 512 * 1024
 
@@ -86,32 +92,7 @@ def get_bimix():
     return df
 
 
-def get_data(save_in=None, force=False) -> pd.DataFrame:
-    """
-
-    Returns: a Dataframe with performance per model
-    columns:
-    model_name: str, a unique identifier of the model (human interpretable)
-    """
-    if save_in and not force:
-        os.makedirs(os.path.dirname(save_in), exist_ok=True)
-        if os.path.isfile(save_in):
-            return pd.read_csv(save_in)
-    dfs = []
-
-    def name_to_param(name):
-        if "base" in name:
-            return 247586304
-        elif "large" in name:
-            return 783173632
-        elif "xxl" in name:
-            return 11135426560
-        elif "xl" in name:
-            return 2849804288
-
-    df = get_bimix()
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
+def get_chinchila():
 
     # TODO extract the full training losses
     df = pd.read_csv("raw_data/chinchila_extracted.csv")
@@ -135,10 +116,10 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["epochs"] = 1
     df["data"] = "MassiveText"  # unknown Google thing
     df["model_type"] = "Gopher"  # slight changes, adamW, slight tokenizer change
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
-    res = pd.concat(dfs)
-    res["loss_cols"] = res["loss_cols"].apply(tuple)
+    return [df]
+
+
+def get_overtrain():
 
     df = pd.read_csv("raw_data/overtrain/overtrain.csv")
     df = df.rename(columns={"loss": "openLM_loss",
@@ -214,9 +195,20 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
         lambda row: row["scaled_set"] if compute_opt_per_model[(row["scaled_set"], row["num_params"])] == row[
             "compute_opt"] else np.nan, axis=1)
     df["seed"] = "0"
+    return [df]
 
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
+
+def get_t5():
+
+    def name_to_param(name):
+        if "base" in name:
+            return 247586304
+        elif "large" in name:
+            return 783173632
+        elif "xxl" in name:
+            return 11135426560
+        elif "xl" in name:
+            return 2849804288
 
     df = pd.read_csv("aggregated_eval/T5_pile.csv")
     df["checkpoint"] = df.apply(
@@ -239,11 +231,11 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["epochs"] = 1
     df["data"] = "pile"
     df["model_type"] = "t5-pile"
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
-    res = pd.concat(dfs)
-    res["loss_cols"] = res["loss_cols"].apply(tuple)
+    return [df]
 
+
+def get_datablations():
+    dfs = []
     df = pd.read_csv(
         "aggregated_eval/datablations_losses.csv", index_col="index")
     df["num_params"] = df["num_params"].apply(to_int)
@@ -332,13 +324,10 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
+    return dfs
 
-    def switch_deduped(data_name):
-        if "pile-deduped" in data_name:
-            return "pile"
-        if "pile" == data_name:
-            return "pile-nodedup"
-        return data_name
+
+def get_opt_trajectories():
 
     def row_to_tokens_seen(row):
         model_size = to_int(row["num_params"])
@@ -375,9 +364,11 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["scaled_set"] = "OPT"
     df["seed"] = "0"
 
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
+    return [df]
 
+
+def get_revisiting():
+    dfs = []
     df = pd.read_csv("aggregated_eval/revisiting_lang.csv")
     df = df.rename(
         columns={"model": "model_type", "Seen Examples": "tokens_seen", "Model": "model_type", "Domain": "domain",
@@ -435,6 +426,18 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["seed"] = "0"
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
+    return dfs
+
+
+def get_pythia():
+    dfs = []
+
+    def switch_deduped(data_name):
+        if "pile-deduped" in data_name:
+            return "pile"
+        if "pile" == data_name:
+            return "pile-nodedup"
+        return data_name
 
     def tokens_per_pythia_data(row):
         if row.data == "pile":
@@ -487,6 +490,31 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
+    return dfs
+
+
+def get_llm360():
+    dfs = []
+    df = pd.read_csv("aggregated_eval/llm360Mamba3B.csv")
+    df["checkpoint"] = np.nan
+    df["loss_cols"] = [["loss"]] * len(df)  # let later processing choose
+    df["original_paper"] = "llm360-private"
+    df["domain"] = "LM"
+    df["num_params"] = to_int("3B")
+    df["scaled_set"] = "llm360Mamba"
+
+    df["seed"] = "0"
+    df = df.rename(columns={"step": "tokens_seen"})
+    df["tokens_seen"] *= to_int("500B") / 176703
+    df = df[df["tokens_seen"] != 0]
+    df["model_name"] = "LLM360Mamba3B"
+    df["arch"] = "ssm"
+    df["flops"] = None
+    df["epochs"] = 1
+    df["data"] = "LLM360/AmberDatasets"
+    df["model_type"] = "LLM360Mamba"
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
 
     df = pd.read_csv("aggregated_eval/llm360Mamba3B.csv")
     df["checkpoint"] = np.nan
@@ -508,59 +536,29 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["model_type"] = "LLM360Mamba"
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
-    res = pd.concat(dfs)
-    res["loss_cols"] = res["loss_cols"].apply(tuple)
-    df = pd.read_csv("aggregated_eval/llm360Mamba3B.csv")
-    df["checkpoint"] = np.nan
-    df["loss_cols"] = [["loss"]] * len(df)  # let later processing choose
-    df["original_paper"] = "llm360-private"
+
+    df = pd.read_csv("aggregated_eval/k2.csv", index_col="index")
+    min_max_cols = [col for col in df.columns if col.endswith(
+        "_MIN") or col.endswith("_MAX")]
+    spike_cols = [col for col in df.columns if
+                  "spike" in col]
+    ministage_cols = [col for col in df.columns if "minis" in col]
+    # TODO add ministage_cols if adding the data from the last part of training
+    df = df.drop(columns=min_max_cols+spike_cols+ministage_cols)
+    df["tokens_per_epoch"] = to_int("1.4T")
+    df["epochs"] = df["tokens_seen"] / df["tokens_per_epoch"]
+    loss_cols = []
+    # chose to use downstream
+    loss_cols += [x for x in df.columns if "eval" in x]
+    # chose to use validation loss
+    loss_cols += [x for x in df.columns if "loss" in x]
+    df["loss_cols"] = [loss_cols] * len(df)  # let later processing choose
+    df["original_paper"] = "LM360:arxiv-2312.06550"
     df["domain"] = "LM"
-    df["num_params"] = to_int("3B")
-    df["scaled_set"] = "llm360Mamba"
-
-    df["seed"] = "0"
-    df = df.rename(columns={"step": "tokens_seen"})
-    df["tokens_seen"] *= to_int("500B") / 176703
-    df = df[df["tokens_seen"] != 0]
-    df["model_name"] = "LLM360Mamba3B"
-    df["arch"] = "ssm"
-    df["flops"] = None
-    df["epochs"] = 1
-    df["data"] = "LLM360/AmberDatasets"
-    df["model_type"] = "LLM360Mamba"
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
-    res = pd.concat(dfs)
-    res["loss_cols"] = res["loss_cols"].apply(tuple)
-
-    res = pd.concat(dfs)
-    res["loss_cols"] = res["loss_cols"].apply(tuple)
-
-    df = pd.read_csv("raw_data/gpt3/extracted.csv")
-    meta_cols = ["model_name", "num_params", "num_layers",
-                 "width", "num_heads", "head_dim", "batch_size", "lr"]
-    metadata = pd.read_excel(
-        "raw_data/gpt3/gpt3_metadata.xlsx", header=None, names=meta_cols)
-
-    model_names = metadata["model_name"].unique()
-    df["model_name"] = df["model"].apply(
-        lambda x: [name for name in model_names if x.lower() in name.lower()][0])
-    df = pd.merge(df, metadata, on="model_name")
-    df["checkpoint"] = np.nan
-    df["loss_cols"] = [["val_loss"]] * len(df)  # let later processing choose
-    df["original_paper"] = "gpt3 - arxiv.org-abs-2005.14165"
-    df["domain"] = "LM"
-    df["scaled_set"] = "gpt3"
-    df["seed"] = "0"
-    df = df.rename(columns={"step": "tokens_seen"})
-    df["tokens_seen"] *= to_int("1b")
-    df = df[df["tokens_seen"] != 0]
-    df["arch"] = "dec"
-    df["flops"] = None
-    df["epochs"] = 1
-    df["data"] = "gpt3"
-    df["model_type"] = "gpt3"
     df["num_params"] = df["num_params"].apply(to_int)
+    df["scaled_set"] = np.nan
+    df["seed"] = "0"
+    df = df[df["tokens_seen"] != 0]
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
@@ -585,9 +583,40 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
-    res = pd.concat(dfs)
-    res["loss_cols"] = res["loss_cols"].apply(tuple)
+    return dfs
 
+
+def get_extracted_gpt3():
+
+    df = pd.read_csv("raw_data/gpt3/extracted.csv")
+    meta_cols = ["model_name", "num_params", "num_layers",
+                 "width", "num_heads", "head_dim", "batch_size", "lr"]
+    metadata = pd.read_excel(
+        "raw_data/gpt3/gpt3_metadata.xlsx", header=None, names=meta_cols)
+    model_names = metadata["model_name"].unique()
+    df["model_name"] = df["model"].apply(
+        lambda x: [name for name in model_names if x.lower() in name.lower()][0])
+    df = pd.merge(df, metadata, on="model_name")
+    df["checkpoint"] = np.nan
+    df["loss_cols"] = [["val_loss"]] * len(df)  # let later processing choose
+    df["original_paper"] = "gpt3 - arxiv.org-abs-2005.14165"
+    df["domain"] = "LM"
+    df["scaled_set"] = "gpt3"
+    df["seed"] = "0"
+    df = df.rename(columns={"step": "tokens_seen"})
+    df["tokens_seen"] *= to_int("1b")
+    df = df[df["tokens_seen"] != 0]
+    df["arch"] = "dec"
+    df["flops"] = None
+    df["epochs"] = 1
+    df["data"] = "gpt3"
+    df["model_type"] = "gpt3"
+    df["num_params"] = df["num_params"].apply(to_int)
+    return [df]
+
+
+def get_moduleformer():
+    dfs = []
     df = pd.read_csv("raw_data/IBM_MoE.csv")
     df = df.dropna(axis=0)
     df = df.rename(columns={"Model": "model_name",
@@ -626,7 +655,10 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
+    return dfs
 
+
+def get_olmo():
     df = pd.read_csv("aggregated_eval/olmo.csv")
 
     # ignores downstream
@@ -645,9 +677,10 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["seed"] = "0"
 
     df["flops"] = None
+    return [df]
 
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
+
+def get_mad():
 
     skipped = 0
     models_seen = 0
@@ -675,7 +708,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
                 skipped += skip
     df = pd.DataFrame.from_records(rows)
     df = df.rename(columns={"size": "num_params"})
-    df['original_paper'] = "MAD arxiv.org-2403.17844"
+    df['original_paper'] = "MAD arxiv.org/2403.17844"
     df['tokens_seen'] = df.apply(
         lambda row: row["flops"] / 6 / to_int(row["num_params"]), axis=1)
     df['checkpoint'] = np.nan
@@ -687,9 +720,11 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df["model_type"] = df.apply(lambda row: row['scaled_set'].lower(), axis=1)
     df["data"] = "pile"
     df["loss_cols"] = [["loss"]] * len(df)
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
-    dfs.append(df)
+    return df
 
+
+def get_red_pajama():
+    dfs = []
     df = pd.read_csv("raw_data/redPajama/2.4B.csv",
                      names=["tokens_seen", "train_loss"])
     df["tokens_seen"] = df["tokens_seen"].apply(lambda x: int(x * 1e9))
@@ -736,6 +771,75 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     df['checkpoint'] = checkpoints
     df['epochs'] = 1
     df['original_paper'] = "blog-redpajama-7b"
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
+
+
+def get_data(save_in=None, force=False) -> pd.DataFrame:
+    """
+    Returns: a Dataframe with performance per model
+    columns:
+    model_name: str, a unique identifier of the model (human interpretable)
+    """
+    if save_in and not force:
+        os.makedirs(os.path.dirname(save_in), exist_ok=True)
+        if os.path.isfile(save_in):
+            return pd.read_csv(save_in)
+    dfs = []
+
+    df = get_bimix()
+    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs.append(df)
+
+    new_dfs = get_chinchila()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_overtrain()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_t5()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_datablations()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_opt_trajectories()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_revisiting()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_pythia()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_llm360()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_extracted_gpt3()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_olmo()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_mad()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    new_dfs = get_redpajama()
+    test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    dfs += new_dfs
+
+    ### combine all ###
     res = pd.concat(dfs)
     res["loss_cols"] = res["loss_cols"].apply(tuple)
     res = res.sort_values(["model_type", "model_name", "tokens_seen"])
@@ -751,24 +855,28 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
 
 if __name__ == '__main__':
     data = get_data(save_in=None)
+    print()
 
 # OLMO (https://arxiv.org/pdf/2402.00838.pdf) data from https://wandb.ai/ai2-llm/OLMo-7B/reports/OLMo-7B-Twin-2T--Vmlldzo2NzU0NTIz
 # datablations (https://arxiv.org/pdf/2305.16264.pdf) through google drive files now in datablations dir.
 # OPT evals found in pythia, loss extracted from training_trajectory_analysis and checkpoints found here (not HF friendly) https://github.com/facebookresearch/metaseq/tree/main/projects/OPT
 # OPT loss extracted from training_trajectory_analysis paper https://arxiv.org/pdf/2212.09803.pdf
 # revisiting_neural_scaling_laws (lambda and vision) https://github.com/google-research/google-research/tree/master/revisiting_neural_scaling_laws/data paper https://arxiv.org/abs/2209.06640
-# LM360 Amber (the other one had too many phases) https://www.llm360.ai/
+# LM360 Amber,K2 (the other one had too many phases) https://www.llm360.ai/
 # Red Pajamas blog:https://www.together.ai/blog/redpajama-models-v1  model checkpoints here(other sizes elsewhere): https://huggingface.co/togethercomputer/RedPajama-INCITE-7B-Base
 # ModuleFormer MOE (https://arxiv.org/abs/2306.04640) (LLMs -0shot.csv) from https://docs.google.com/spreadsheets/d/1b_Em7HVESSExXCPvssJT7El5zc43KvysDJFJqVNM5jE/edit?usp=sharing
 # overtrain: Language models scale reliably with over-training and on downstream tasks https://arxiv.org/abs/2403.08540 https://github.com/mlfoundations/scaling/blob/a003c4913793ac2ae7ef87b28ecb562955d026d5/scaling/constants.py#L139-L146
+# bimix: DataMixing arxiv.org/abs/2405.14908
+# chinchila (manually extracted) Training Compute-Optimal Large Language Models
+# Gzip https://arxiv.org/abs/2405.16684 https://github.com/KhoomeiK/complexity-scaling/tree/main
 # TODO
 # Some granite training data: https://watsonx-data.cash.sl.cloud9.ibm.com/models/detail/5
 # granite logs? https://ibm-research.slack.com/archives/C049F4GK05T/p1702911455907359?thread_ts=1702910609.328829&cid=C049F4GK05T
 # ConvNets match https://arxiv.org/pdf/2310.16764.pdf
 # ViT scaling laws arxiv.org/abs/2305.13035
-# Stella's list might have more? https://docs.google.com/spreadsheets/d/1gc6yse74XCwBx028HV_cvdxwXkmXejVjkO-Mz2uwE0k/edit#gid=0
+# Stella's list might have more metadata? https://docs.google.com/spreadsheets/d/1gc6yse74XCwBx028HV_cvdxwXkmXejVjkO-Mz2uwE0k/edit#gid=0
 # hyperparameters for some of the models if useful https://docs.google.com/spreadsheets/d/14vbBbuRMEHoqeuMHkTfw3uiZVmyXNuoSp8s-aHvfvZk/edit#gid=0
 # multi-modal scaling laws https://openreview.net/pdf?id=2n7dHVhwJf Scaling Laws for Generative Mixed-Modal Language Models
-# Mow scaling law https://arxiv.org/abs/2402.07871
+# (small) Moe scaling law https://arxiv.org/abs/2402.07871
 # black mamba (MOW+mamba arch, might need to change current moe to dec moe or give moe a separate col) https://arxiv.org/abs/2402.01771
 # extract more from chinchila

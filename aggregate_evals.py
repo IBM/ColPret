@@ -32,7 +32,9 @@ def parse_winobias(eval_res):
             if isinstance(dataset_res, str) and dataset_res not in extracted_val:
                 stop = True
                 break
-            key = dataset_res["task_name"] + "-" + dataset_res["prompt_name"].replace(" ", "_") + " " + extracted_val
+            key = dataset_res["task_name"] + "-" + \
+                dataset_res["prompt_name"].replace(
+                    " ", "_") + " " + extracted_val
             res[key] = dataset_res[extracted_val]
         if stop:
             res = {key + " " + subkey: val
@@ -44,7 +46,8 @@ def parse_winobias(eval_res):
 
 
 def normalize_pythia_model_name(model_type, model_size, data, num_shots):
-    name = f"{model_type}-{model_size}-{data.replace('pile', '').replace('-', '')}".lower().strip("-_ ")
+    name = f"{model_type}-{model_size}-{data.replace('pile', '').replace('-', '')}".lower(
+    ).strip("-_ ")
     if num_shots != 0:
         name += f"-{num_shots}shot"
     if "v0" in model_type:
@@ -102,7 +105,8 @@ def aggregate_pythia(path, save_dir):
                     steps, res, config = parse_winobias(eval_res)
                     num_shots = config["num_fewshot"]
                     model_type = normalize_pythia_model_type(model_type)
-                    model_name = normalize_pythia_model_name(model_type, model_size, data, num_shots)
+                    model_name = normalize_pythia_model_name(
+                        model_type, model_size, data, num_shots)
                 elif model_type == "winobias":
                     model_name = model_name.split("_")[2]
                     if "long" in model_name:
@@ -121,7 +125,8 @@ def aggregate_pythia(path, save_dir):
                     else:
                         num_shots = 0
                     model_type = normalize_pythia_model_type(model_type)
-                    model_name = normalize_pythia_model_name(model_type, model_size, data, num_shots)
+                    model_name = normalize_pythia_model_name(
+                        model_type, model_size, data, num_shots)
                 elif test_type == "bias-evals":
                     data = "pile-deduped" if "deduped" in model_name else "pile"
                     model_type = filename.split("-")[0]
@@ -133,12 +138,14 @@ def aggregate_pythia(path, save_dir):
                     steps, res, config = parse_winobias(eval_res)
                     num_shots = config["num_fewshot"]
                     model_type = normalize_pythia_model_type(model_type)
-                    model_name = normalize_pythia_model_name(model_type, model_size, data, num_shots)
+                    model_name = normalize_pythia_model_name(
+                        model_type, model_size, data, num_shots)
                 elif test_type == "winobias":
                     raise
                 else:  # parse main experiments
                     data = "pile-deduped" if "deduped" in model_name else "pile"
-                    model_name = model_name.split("_")[0].replace("-global", "")
+                    model_name = model_name.split(
+                        "_")[0].replace("-global", "")
                     if "tok" in model_name:  # baselines for the interventions, just like checkpoints
                         continue
                     if "bf16" in model_name:  # there is only one:
@@ -146,7 +153,8 @@ def aggregate_pythia(path, save_dir):
                         model_type = "pythia-bf16"
                         model_size = "1b"
                         num_shots = 0 if "zero" in root else 5
-                        model_name = normalize_pythia_model_name(model_type, model_size, data, num_shots)
+                        model_name = normalize_pythia_model_name(
+                            model_type, model_size, data, num_shots)
                     # original paper did not need to specify it is pythia...
                     if not [model for model in ("pythia", "bloom", "opt") if model in model_name]:
                         model_name = "pythia-" + model_name
@@ -167,7 +175,8 @@ def aggregate_pythia(path, save_dir):
                     model_size = shortname.split("-")[-1]
                     model_type = "-".join(shortname.split("-")[:-1])
                     if model_name.endswith("long"):
-                        model_name = normalize_pythia_model_name(model_type, model_size, data, num_shots)
+                        model_name = normalize_pythia_model_name(
+                            model_type, model_size, data, num_shots)
                     if "v0" in root:
                         model_type = model_type.replace("pythia", "pythia-v0")
                         model_name = model_name.replace("-0shot", "") + "-v0"
@@ -191,7 +200,8 @@ def aggregate_pythia(path, save_dir):
                     elif "350m" in model_name.lower():  # older models, with the old name
                         checkpoint = np.nan
                     elif steps in [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1000] or steps % 1000 == 0:
-                        checkpoint = hf_checkpoint(f"EleutherAI/{model_name.split('_')[0]}", steps)
+                        checkpoint = hf_checkpoint(
+                            f"EleutherAI/{model_name.split('_')[0]}", steps)
                     else:
                         checkpoint = np.nan
 
@@ -222,7 +232,8 @@ def aggregate_pythia(path, save_dir):
                     raise ValueError("unexpected model")
                 loss_columns = [x for x in res.keys() if "std" not in x]
                 assert to_int(model_size), f"{model_size}, is not a number"
-                assert normalize_pythia_model_name(model_type, model_size, data, num_shots) == model_name
+                assert normalize_pythia_model_name(
+                    model_type, model_size, data, num_shots) == model_name
                 assert normalize_pythia_model_type(model_type) == model_type
 
                 rows.append(
@@ -240,14 +251,15 @@ def aggregate_pythia(path, save_dir):
     df = pd.DataFrame(data=rows,
                       columns=["model_name", "steps", "num_params", "model_type", "test_subtype", "test_type",
                                "checkpoint", "loss_cols", "data", "tokens_per_training_batch"] +
-                              list(config_cols) + list(res_cols))
+                      list(config_cols) + list(res_cols))
     os.makedirs(save_dir, exist_ok=True)
     df.to_csv(os.path.join(save_dir, "pythia.csv"), index=False)
 
 
 def aggregate_mamballm360(save_dir):
     dfs = []
-    df = pd.read_csv("raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_29_45.965-04_00_loss_curve.csv")
+    df = pd.read_csv(
+        "raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_29_45.965-04_00_loss_curve.csv")
     cols = [col for col in df.columns if
             "loss" in col and "MIN" not in col and "MAX" not in col]  # note early means a later run, prefer later runs when duplicate losses (means a restart)
 
@@ -258,27 +270,91 @@ def aggregate_mamballm360(save_dir):
                 return val
 
     df["loss"] = df.apply(extract_val, axis=1)
-    df = df.drop(columns=[col for col in df.columns if col not in ["step", "loss"]])
+    df = df.drop(
+        columns=[col for col in df.columns if col not in ["step", "loss"]])
     dfs.append(df)
 
-    df = pd.read_csv("raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_29_57.317-04_00_learning_rate.csv")
+    df = pd.read_csv(
+        "raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_29_57.317-04_00_learning_rate.csv")
     cols = [col for col in df.columns if
             "rate" in col and "MIN" not in col and "MAX" not in col]  # note early means a later run, prefer later runs when duplicate  (means a restart)
     df["lr"] = df.apply(extract_val, axis=1)
-    df = df.drop(columns=[col for col in df.columns if col not in ["step", "lr"]])
+    df = df.drop(
+        columns=[col for col in df.columns if col not in ["step", "lr"]])
     dfs.append(df)
 
-    df = pd.read_csv("raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_30_05.126-04_00_grad_norm.csv")
+    df = pd.read_csv(
+        "raw_data/lm360/MAMBA3B/wandb_export_2024-04-21T20_30_05.126-04_00_grad_norm.csv")
     cols = [col for col in df.columns if
             "grad" in col and "MIN" not in col and "MAX" not in col]  # note early means a later run, prefer later runs when duplicate  (means a restart)
     df["grad_norm"] = df.apply(extract_val, axis=1)
-    df = df.drop(columns=[col for col in df.columns if col not in ["step", "grad_norm"]])
+    df = df.drop(
+        columns=[col for col in df.columns if col not in ["step", "grad_norm"]])
     dfs.append(df)
 
     import functools as ft
     df = ft.reduce(lambda left, right: pd.merge(left, right, on='step'), dfs)
     os.makedirs(save_dir, exist_ok=True)
     df.to_csv(os.path.join(save_dir, "llm360Mamba3B.csv"), index=False)
+
+
+def aggregate_k2_lm360(save_dir):
+    loss_cols = []
+    for root, _, filenames in os.walk(
+            os.path.join("raw_data", "lm360/K2")):  # downloaded manually from https://wandb.ai/llm360/projects
+        dirname = root.split(os.sep)[-1]
+        model_name = "K2"
+        num_params = "65B"
+        data = f"LLM360/{model_name}Datasets"
+        eval_dfs = []
+        for filename in filenames:
+            if filename.startswith("."):
+                continue
+            eval_df = pd.read_csv(os.path.join(root, filename))
+            ministage_cols = [
+                col for col in eval_df.columns if "ministage" in col]
+            if ministage_cols:
+                # TODO parse the second LR stage? and match it corresponding checkpoints (https://huggingface.co/LLM360/K2)
+                eval_df = eval_df[eval_df[ministage_cols[0]].isna()]
+            # remove loss spikes
+            spikes_cols = [
+                col for col in eval_df.columns if "spike" in col]
+            eval_df = eval_df[eval_df[spikes_cols[0]].isna()]
+
+            if "k2 training - lm loss" in eval_df.columns:
+                checkpoint_steps = math.floor((len(eval_df) - 1) / 360)
+                checkpoints = [
+                    x / checkpoint_steps for x in range(len(eval_df))]
+                # because of the rounding the loss steps do not exactly match
+                checkpoints[-1] = 360
+                eval_df["checkpoint"] = checkpoints
+                eval_dfs.insert(0, eval_df)
+            else:
+                eval_df["checkpoint"] = eval_df["Step"]
+                eval_df = eval_df.drop(columns=["Step"])
+                eval_dfs.append(eval_df)
+        if not eval_dfs:
+            continue
+        model_df = reduce(lambda left, right: pd.merge(left, right, on=["checkpoint"],
+                                                       how="outer"), eval_dfs)
+        model_df = model_df.reset_index()
+        model_df["tokens_seen"] = np.arange(
+            len(model_df)) * to_int("1.4T") / (len(model_df) - 1)
+        model_df["flops"] = model_df["tokens_seen"] * 6 * to_int(num_params)
+        checkpoint_idxs = np.round(np.linspace(
+            0, model_df["tokens_seen"].nunique() - 1, 360)).astype(int)
+        tokens_to_checkpoint = {tokens: i for i, tokens in enumerate(
+            model_df["tokens_seen"].unique()[checkpoint_idxs])}
+        model_df["checkpoint"] = model_df["tokens_seen"].apply(
+            lambda tokens: hf_checkpoint(f"LLM360/{model_name}", f"ckpt_{tokens_to_checkpoint[tokens]}") if tokens in tokens_to_checkpoint else None)
+        model_df["model_type"] = "Lamma"
+        model_df["arch"] = "dec"
+        model_df["data"] = data
+        model_df["model_name"] = model_name
+        model_df["num_params"] = num_params
+        os.makedirs(save_dir, exist_ok=True)
+        model_df.to_csv(os.path.join(
+            save_dir, f"{model_name}.csv"), index=False)
 
 
 def aggregate_lm360(save_dir):
@@ -316,8 +392,10 @@ def aggregate_lm360(save_dir):
             if "train - loss" in eval_df.columns:
                 # mapping = dict(zip(np.linspace(0, len(eval_df) - 1,len(eval_df) - 1),np.linspace(0,354,2))
                 checkpoint_steps = math.floor((len(eval_df) - 1) / 356)
-                checkpoints = [x / checkpoint_steps for x in range(len(eval_df))]
-                checkpoints[-1] = 356  # becase of the rounding the loss steps do not exactly match
+                checkpoints = [
+                    x / checkpoint_steps for x in range(len(eval_df))]
+                # becase of the rounding the loss steps do not exactly match
+                checkpoints[-1] = 356
                 eval_df["checkpoint"] = checkpoints
                 eval_dfs.insert(0, eval_df)
             else:
@@ -330,7 +408,8 @@ def aggregate_lm360(save_dir):
                                                        how="outer"), eval_dfs)
         model_df = model_df.reset_index()
         # model_df["steps"] = np.arrange(len(model_df)) * 2240
-        model_df["tokens_seen"] = np.arange(len(model_df)) * to_int("1.25T") / (len(model_df) - 1)
+        model_df["tokens_seen"] = np.arange(
+            len(model_df)) * to_int("1.25T") / (len(model_df) - 1)
         model_df["flops"] = model_df["tokens_seen"] * 6 * to_int(num_params)
         model_df["checkpoint"] = model_df["checkpoint"].apply(
             lambda i: hf_checkpoint(f"LLM360/{model_name}", f"ckpt_{i}") if i == int(
@@ -341,7 +420,8 @@ def aggregate_lm360(save_dir):
         model_df["model_name"] = model_name
         model_df["num_params"] = num_params
         os.makedirs(save_dir, exist_ok=True)
-        model_df.to_csv(os.path.join(save_dir, f"{model_name}.csv"), index=False)
+        model_df.to_csv(os.path.join(
+            save_dir, f"{model_name}.csv"), index=False)
 
 
 def aggregate_olmo(path, save_dir):
@@ -351,19 +431,24 @@ def aggregate_olmo(path, save_dir):
         for filename in filenames:
             if filename.endswith("csv"):
                 single_eval_df = pd.read_csv(os.path.join(root, filename))
-                drop_columns = [col for col in single_eval_df.columns if col.endswith("MAX") or col.endswith("MIN")]
+                drop_columns = [col for col in single_eval_df.columns if col.endswith(
+                    "MAX") or col.endswith("MIN")]
                 single_eval_df = single_eval_df.drop(columns=drop_columns)
 
-                model_name, test_name = single_eval_df.columns[-1].replace("Group:", "").strip().split("- eval/")
+                model_name, test_name = single_eval_df.columns[-1].replace(
+                    "Group:", "").strip().split("- eval/")
                 if "run" in model_name:
                     model_name = model_name.split("-run")[0].strip()
 
-                single_eval_df[test_name] = single_eval_df.iloc[:, 1:].sum(axis=1)
-                single_eval_df = single_eval_df.drop(columns=single_eval_df.columns[1:-1])
+                single_eval_df[test_name] = single_eval_df.iloc[:, 1:].sum(
+                    axis=1)
+                single_eval_df = single_eval_df.drop(
+                    columns=single_eval_df.columns[1:-1])
 
                 single_eval_df["model_name"] = model_name
 
-                single_eval_df["num_params"] = model_name.split("B")[0].split("-")[-1] + "B"
+                single_eval_df["num_params"] = model_name.split(
+                    "B")[0].split("-")[-1] + "B"
                 # dfs.append(single_eval_df)
                 if model_name not in res_df:
                     res_df[model_name] = single_eval_df
@@ -371,7 +456,8 @@ def aggregate_olmo(path, save_dir):
                     continue  # data downloaded twice by mistake
                 else:
                     res_df[model_name] = pd.DataFrame.merge(res_df[model_name], single_eval_df,
-                                                            on=["Step", "model_name", "num_params"],
+                                                            on=["Step", "model_name",
+                                                                "num_params"],
                                                             how="outer")
     res_df = pd.concat(res_df.values())
 
@@ -440,18 +526,53 @@ def aggregate_t5_pile(path, save_dir):
                         if key not in train:
                             train[key] = {}
                         for subline in line.summary.value:
-                            train[key][subline.tag] = tf.make_ndarray(subline.tensor)
+                            train[key][subline.tag] = tf.make_ndarray(
+                                subline.tensor)
                 except Exception as e:
                     print(f"Corrupted file {os.path.join(root, filename)}")
-    res_df = pd.DataFrame(train).transpose().reset_index(names=["model_name", "steps"])
+    res_df = pd.DataFrame(train).transpose().reset_index(
+        names=["model_name", "steps"])
     os.makedirs(save_dir, exist_ok=True)
     res_df.to_csv(os.path.join(save_dir, f"t5_pile.csv"), index=False)
 
 
+def aggregate_gzip(save_dir):
+    loss_cols = []
+    for root, _, filenames in os.walk(
+            os.path.join("raw_data", "gzip")):  # downloaded manually from https://wandb.ai/llm360/projects
+        dirname = root.split(os.sep)[-1]
+        model_name = "gzip"
+        data = f"LLM360/{model_name}Datasets"
+        eval_dfs = []
+        for filename in filenames:
+            if filename.startswith("."):
+                continue
+            with open(os.path.join(root, filename)) as fl:
+                data = [json.loads(line) for line in fl if line.strip()]
+            df = pd.DataFrame(data)
+            df = df.rename(
+                columns={"dataset_name": "data", "model_size": "num_params", "token_ct": "tokens_seen"})
+            df["model_name"] = df.apply(
+                lambda row: "gzip_" + str(row["num_params"]), axis=1)
+            eval_dfs.append(df)
+
+        model_df = reduce(lambda left, right: pd.merge(left, right, on=["checkpoint"],
+                                                       how="outer"), eval_dfs)
+        model_df["flops"] = model_df["tokens_seen"] * 6 * to_int(num_params)
+        model_df["checkpoint"] = np.nan
+        model_df["model_type"] = "gzip"
+        model_df["arch"] = "dec"
+        os.makedirs(save_dir, exist_ok=True)
+        model_df.to_csv(os.path.join(
+            save_dir, f"{model_name}.csv"), index=False)
+
+
 if __name__ == '__main__':
     save_dir = "aggregated_eval"
+    aggregate_gzip(save_dir=save_dir)
+    aggregate_k2_lm360(save_dir=save_dir)
+    aggregate_lm360(save_dir=save_dir)
+    aggregate_mamballm360(save_dir=save_dir)
     aggregate_t5_pile("t5_pile", save_dir=save_dir)
     aggregate_olmo("OLMO", save_dir=save_dir)
     aggregate_pythia("pythiarch/evals", save_dir=save_dir)
-    aggregate_lm360(save_dir=save_dir)
-    aggregate_mamballm360(save_dir=save_dir)
