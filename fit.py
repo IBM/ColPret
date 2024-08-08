@@ -1,5 +1,6 @@
 import os
 
+from experiments.num_to_size import iter_model_sizes
 from experiments.minimal_cut import minimal_cut
 from experiments.predict_last import PredictBest, PredictLast
 from experiments.predict_with_size_or_number import closer_in_scale_is_predictive, larger_is_predictable, \
@@ -41,6 +42,14 @@ if __name__ == '__main__':
     fit_info = ChinchillaFit
     # hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
     #          fit_info=fit_info, cut_beginning=10 ** 10, train_percentages=[1], iter_models=iter_model_sizes)
+    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
+                                  fit_info=fit_info, num_train_models=3)
+    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
+                                  fit_info=fit_info, num_train_models=4)
+    experiment_name = "num_to_size"
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, experiment_name), at_least_loss=10, abs_are=abs_are,
+             fit_info=fit_info, cut_beginning=10 ** 10, train_percentages=[1], iter_models=iter_model_sizes, experiment_name=experiment_name, iter_axis_name="Largest Model Parameters (Scale up predicted)")
+
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=10 ** 10, verbose=verbose)
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "scale_down"), at_least_loss=10, abs_are=abs_are,
@@ -52,10 +61,6 @@ if __name__ == '__main__':
     scale_fit_per_model(df, force=force, fig_dir=os.path.join(
         fig_dir, "per_model"), at_least_loss=10, abs_are=abs_are)
 
-    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
-                                  fit_info=fit_info, num_train_models=3)
-    closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
-                                  fit_info=fit_info, num_train_models=4)
     minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10,
                 abs_are=abs_are, fit_info=fit_info)
     predict_smallest(df, force=force, fig_dir=fig_dir,

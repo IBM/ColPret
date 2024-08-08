@@ -24,7 +24,7 @@ from util.cache import get_cache, save_cache
 from util.plots import plot_pred_actual_compare, capitalize_fig
 
 matplotlib.use('QtAgg')
-
+FIG_FORMAT = "pdf"
 
 plt.interactive(False)
 
@@ -361,7 +361,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
     #     plt.ylim(bottom=0)
     #     plt.legend(bbox_to_anchor=(1.04, 1), borderaxespad=0)
     #     if fig_dir:
-    #         plt.savefig(os.path.join(fig_dir, f"per_model_{eval}.png"), bbox_inches="tight")
+    #         plt.savefig(os.path.join(fig_dir, f"per_model_{eval}.{FIG_FORMAT}"), bbox_inches="tight")
     #     plt.show()
 
     # Group by characteristics
@@ -409,7 +409,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
         plt.ylabel("Mean Normalized Distance")
         if fig_dir:
             plt.savefig(os.path.join(
-                fig_dir, f"per_model_{eval}_{col_group}.png"), bbox_inches="tight")
+                fig_dir, f"per_model_{eval}_{col_group}.{FIG_FORMAT}"), bbox_inches="tight")
         if show:
             plt.show()
         plt.clf()
@@ -447,7 +447,7 @@ def scale_fit_per_model(df, force=False, fig_dir=None, show=False,
             if fig_dir:
                 os.makedirs(os.path.join(
                     fig_dir, "compare_predictions"), exist_ok=True)
-                plt.savefig(os.path.join(fig_dir, "compare_predictions", f"{group}_{col_group}_{eval}.png"),
+                plt.savefig(os.path.join(fig_dir, "compare_predictions", f"{group}_{col_group}_{eval}.{FIG_FORMAT}"),
                             bbox_inches="tight")
             if show:
                 plt.show()
@@ -465,22 +465,16 @@ def mean_normalized_distance(predicted, target, abs):
 
 
 def plot_models_percentage_hist(evals, eval, fig_dir, iterate_over="scaled_set", index="#Train models",
-                                columns="percentage", vmin=0, vmax=1, min_rows=2,
+                                columns="percentage", vmin=0, vmax=1, min_rows=2, eval_contours=None, contour_kind="steps", iso: str = None, metadata=None,
                                 show=False, verbose=False):
     for scaled_set in evals[iterate_over].unique():
         subdf = evals.query(f"@{iterate_over}=={iterate_over}")
-        plot_heatmap(evals=subdf, eval=eval, fig_dir=fig_dir, show=show,
-                     title=scaled_set,
-                     fig_name=f"hist-perc-{eval}_{scaled_set}.png", column=columns, index=index, vmin=vmin, vmax=vmax,
+        plot_heatmap(evals=subdf, eval=eval, fig_dir=fig_dir, show=show, title="", metadata=metadata,
+                     #  title=scaled_set,
+                     fig_name=f"hist-perc-{eval}_{scaled_set}.{FIG_FORMAT}", column=columns, index=index, vmin=vmin, vmax=vmax,
+                     eval_contours=eval_contours, iso=iso, contour_kind=contour_kind,
                      min_rows=min_rows, verbose=verbose)
     return
-    # plt.title(scaled_set)
-    # sns.heatmap(100 * pivot, annot=True, vmin=100 * vmin, vmax=100 * vmax)
-    # if fig_dir:
-    #     plt.savefig(os.path.join(fig_dir, f"hist-perc-{eval}_{scaled_set}.png"), bbox_inches="tight")
-    # if show:
-    #     plt.show()
-    # plt.clf()
 
 
 def get_per_model_metadata(df, index="model_name"):
@@ -607,7 +601,7 @@ def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_se
     capitalize_fig()
     if fig_dir:
         plt.savefig(os.path.join(
-            fig_dir, f"popts_{name}.png"), bbox_inches="tight")
+            fig_dir, f"popts_{name}.{FIG_FORMAT}"), bbox_inches="tight")
     if show:
         plt.show()
     plt.clf()
@@ -756,7 +750,27 @@ def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
     ax = sns.heatmap(100 * pivot, annot=annot, vmin=100 * vmin if pd.notna(vmin) else None,
                      vmax=100 * vmax if pd.notna(vmax) else None,
                      norm=LogNorm() if log_scale else None)  # , cmap="crest")
-    plt.yticks(rotation=0)
+    if index == "num_params" and metadata is not None:
+        assert evals["test_model"].nunique() == 1
+        tick_labels = [item.get_text() for item in ax.get_yticklabels()]
+        test_model_params = float(
+            metadata["num_params"][evals["test_model"].iloc[0]])
+        # test_size =  test_model_params/1e9
+        # test_size = round((test_size)/1e9, 1)
+
+        def improve_param_naming(params):
+            params = float(params)
+            scale = test_model_params/params
+            scale = int(scale) if scale > 1 else round(scale, 2)
+
+            train_size = params/1e9
+            largest_size = round((train_size), 1)
+            return f"{largest_size}B \n(X{scale})"
+        ticks = plt.yticks(rotation=0)
+        ax = plt.gca()
+        ax.set_ylabel("Largest Model Parameters (Scale up predicted)")
+        ax.set_yticklabels([improve_param_naming(tick_label)
+                            for tick_label in tick_labels])
     # plt.setp(ax.get_yticklabels(), rotation=90)
     # sns.set_palette(sns.color_palette("crest"))
 
@@ -772,7 +786,7 @@ def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
         y += 0.2
         ax = plt.scatter(x, y, marker="*")
         if not annot:
-            ax = plt.annotate(
+            plt.annotate(
                 f"\n<{int(eval_contours[i]* 100)}", (x-0.2, y+0.25), color=colors[i], weight='bold')
     for line in iso_contours:
         x_iso = []
@@ -789,14 +803,14 @@ def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
         if len(x_iso) > 3:
             x_plot, y_plot = cells_to_contours(
                 x_iso, y_iso, contour_kind, 1, 0)
-            ax = plt.plot(x_plot, y_plot)
+            plt.plot(x_plot, y_plot)
 
         # # Add data points to the plot
         # for x_val, y_val in zip(x_iso, y_iso):
         #     plt.text(x_val, y_val, str((x_val, y_val)), ha='left', va='bottom')
 
     if title:
-        ax.set_title(title)
+        plt.gca().set_title(title)
     capitalize_fig(ax)
     if fig_dir and fig_name:
         os.makedirs(fig_dir, exist_ok=True)
@@ -805,6 +819,7 @@ def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
         plt.show()
     plt.clf()
     plt.close()
+
     print(f"plotting {os.path.join(fig_dir, fig_name)} done")
 
 
@@ -910,15 +925,15 @@ def aggregate_hist(evals, eval, fig_dir, show, exp_name="", iso=None, eval_conto
         aggregate_by].mean().reset_index()
     plot_heatmap(evals=agg, eval=eval, eval_contours=eval_contours, iso=iso, index=index, fig_dir=fig_dir, show=show,
                  metadata=metadata,
-                 title=None, fig_name=f"hist-num-models-annot-agg-{exp_name}.png", column=column, vmin=vmin,
+                 title=None, fig_name=f"hist-num-models-annot-agg-{exp_name}.{FIG_FORMAT}", column=column, vmin=vmin,
                  vmax=vmax, annot=True, log_scale=log_scale)
     plot_heatmap(evals=agg, eval=eval, eval_contours=eval_contours, iso=iso, index=index, fig_dir=fig_dir, show=show,
                  metadata=metadata,
-                 title=None, fig_name=f"hist-num-models-agg-{exp_name}.png", column=column, vmin=vmin,
+                 title=None, fig_name=f"hist-num-models-agg-{exp_name}.{FIG_FORMAT}", column=column, vmin=vmin,
                  vmax=vmax, annot=False, log_scale=log_scale)
     plot_heatmap(evals=agg, eval=eval, eval_contours=eval_contours, iso=iso, index=index, fig_dir=other_dir, show=show,
                  metadata=metadata,
-                 title=None, fig_name=f"hist-num-models-agg-spl{exp_name}.png", column=column, vmin=vmin,
+                 title=None, fig_name=f"hist-num-models-agg-spl{exp_name}.{FIG_FORMAT}", column=column, vmin=vmin,
                  vmax=vmax, annot=False, log_scale=log_scale, contour_kind="spline")
 
     # by scale X percentage
@@ -937,11 +952,11 @@ def aggregate_hist(evals, eval, fig_dir, show, exp_name="", iso=None, eval_conto
 
     plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=other_dir, show=show, metadata=metadata, min_rows=min_rows,
                  title=None,
-                 fig_name=f"hist-scale-agg_{exp_name}.png", column=column, vmin=vmin, vmax=vmax, ascending_index=False,
+                 fig_name=f"hist-scale-agg_{exp_name}.{FIG_FORMAT}", column=column, vmin=vmin, vmax=vmax, ascending_index=False,
                  annot=False)
     plot_heatmap(evals=agg, eval=eval, index=index, fig_dir=other_dir, show=show, metadata=metadata, min_rows=min_rows,
                  title=None,
-                 fig_name=f"hist-scale-agg-annot_{exp_name}.png", column=column, vmin=vmin, vmax=vmax,
+                 fig_name=f"hist-scale-agg-annot_{exp_name}.{FIG_FORMAT}", column=column, vmin=vmin, vmax=vmax,
                  ascending_index=False,
                  annot=True)
 
@@ -1127,7 +1142,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     #     plt.ylim(bottom=0)
     #     plt.legend(bbox_to_anchor=(1.04, 1), borderaxespad=0)
     #     if fig_dir:
-    #         plt.savefig(os.path.join(fig_dir, f"per_model_{eval}.png"), bbox_inches="tight")
+    #         plt.savefig(os.path.join(fig_dir, f"per_model_{eval}.{FIG_FORMAT}"), bbox_inches="tight")
     #     plt.show()
 
     # Group by characteristics
@@ -1175,7 +1190,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
         plt.ylabel("Mean Normalized Distance")
         if fig_dir:
             plt.savefig(os.path.join(
-                fig_dir, f"perc-are_{eval}_{col_group}.png"), bbox_inches="tight")
+                fig_dir, f"perc-are_{eval}_{col_group}.{FIG_FORMAT}"), bbox_inches="tight")
         if show:
             plt.show()
         plt.clf()
@@ -1215,7 +1230,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
             if fig_dir:
                 os.makedirs(os.path.join(
                     fig_dir, "compare_predictions"), exist_ok=True)
-                plt.savefig(os.path.join(fig_dir, "compare_predictions", f"{group}_{col_group}_{eval}.png"),
+                plt.savefig(os.path.join(fig_dir, "compare_predictions", f"{group}_{col_group}_{eval}.{FIG_FORMAT}"),
                             bbox_inches="tight")
             if show:
                 plt.show()

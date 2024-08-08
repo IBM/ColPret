@@ -68,7 +68,7 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
                                   at_least_loss=float("inf"),
                                   num_train_models=4, train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5,
                                                                          0.6, 0.7, 0.8, 0.9, 1),
-                                  abs_are=True, cut_beginning=10 ** 10, fit_info: FitInfo = ChinchillaFit, verbose=False):
+                                  abs_are=True, cut_beginning=10 ** 10, fit_info: FitInfo = ChinchillaFit,  verbose=False):
 
     test_percentage = 0.7
     if num_train_models is None:
@@ -130,27 +130,29 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
             save_cache(cache, cache_name)
         save_cache(cache, cache_name)
 
+    eval = "are"
     evals = pd.DataFrame(evals, columns=resulting_cols)
     print(
         f"models with max relative error: {evals.sort_values(by='are').dropna()[-10:]['largest_train_model']}")
     # sub_evals = evals.loc[:, ["scaled_set",
     #                           "are", "#Train models", "num_params"]]
+    metadata = get_per_model_metadata(df)
     plot_models_percentage_hist(evals, eval="are", iterate_over="scaled_set", index="num_params",
-                                columns="percentage", fig_dir=fig_dir,                                min_rows=1, show=show)
+                                columns="percentage", fig_dir=fig_dir, iso="flops", eval_contours=[0.15, 0.10, 0.05], min_rows=1, show=show, metadata=metadata)
 
-    # scaled_set_metadata = get_per_model_metadata(df, "scaled_set")
-    # model_name_metadata = get_per_model_metadata(df, "model_name")
-    # subfig_dir = os.path.join(fig_dir, "agg_hist_per_model_type")
-    # for model_type in df["model_type"].unique():
-    #     sub_evals = evals[evals["scaled_set"].apply(
-    #         lambda x: scaled_set_metadata["model_type"][x] == model_type)]
-    #     if sub_evals.empty:
-    #         continue
-    #     aggregate_hist(sub_evals, eval=eval, iso="flops", eval_contours=[0.15, 0.10, 0.05],
-    #                    fig_dir=os.path.join(subfig_dir),
-    #                    exp_name=f"{model_type}",
-    #                    show=show,
-    #                    metadata=model_name_metadata, vmin=0, vmax=0.35, single_scale=True)
+    scaled_set_metadata = get_per_model_metadata(df, "scaled_set")
+    model_name_metadata = get_per_model_metadata(df, "model_name")
+    subfig_dir = os.path.join(fig_dir, "agg_hist_per_model_type")
+    for model_type in df["model_type"].unique():
+        sub_evals = evals[evals["scaled_set"].apply(
+            lambda x: scaled_set_metadata["model_type"][x] == model_type)]
+        if sub_evals.empty:
+            continue
+        aggregate_hist(sub_evals, eval=eval, iso="flops", eval_contours=[0.15, 0.10, 0.05],
+                       fig_dir=os.path.join(subfig_dir),
+                       exp_name=f"{model_type}",
+                       show=show,
+                       metadata=model_name_metadata, vmin=0, vmax=0.35, single_scale=True)
 
 
 def larger_is_predictable(df, force=False, fig_dir=None, show=False, loss_types=("perp"), at_least_loss=float("inf"),
