@@ -8,11 +8,11 @@ from util.fit_utils import plot_models_percentage_hist, get_model_data, get_perf
 from util.read_data import get_data
 
 
-def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), at_least_loss=float("inf"),
+def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), at_least_loss=float("inf"), experiment_name="minimal_cut",
                 minimal_cuts=(0.1, 0.2, 0.3, 0.5, 0.7, 0.9, 0.95, 0.99), abs_are=True, fit_info=ChinchillaFit, cut_beginning=10 ** 10):
 
     test_percentage = 0.7
-    experiment_name = "minimal_cut"
+
     fig_dir = os.path.join(fig_dir, experiment_name)
     os.makedirs(fig_dir, exist_ok=True)
     cache_name = experiment_name + "_" + \
@@ -57,24 +57,24 @@ def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), 
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
 
-    evals = pd.DataFrame(evals, columns=["scaled_set", "min_percentage", "mse", "are", "last_pred", "largest_model",
-                                         "num_models", "params"])
+    evals = pd.DataFrame(evals, columns=["scaled_set", "Min. percentage", "mse", "are", "last_pred", "largest_model",
+                                         "#Train models", "params"])
     print(
         f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['largest_model']}")
-    evals = evals.loc[:, ["scaled_set", "min_percentage", "are", "num_models"]]
+    evals = evals.loc[:, ["scaled_set",
+                          "Min. percentage", "are", "#Train models"]]
     c4_idx = evals["scaled_set"].apply(lambda x: "GPT2-c4" in x)
-    c4 = evals[c4_idx].groupby(["min_percentage", "num_models"])[
+    c4 = evals[c4_idx].groupby(["Min. percentage", "#Train models"])[
         "are"].mean().apply(lambda x: x).reset_index()
     evals = evals[~c4_idx]
     c4["scaled_set"] = "GPT2-c4-all"
     oscar_idx = evals["scaled_set"].apply(lambda x: "GPT2-oscar" in x)
-    oscar = evals[oscar_idx].groupby(["min_percentage", "num_models"])[
+    oscar = evals[oscar_idx].groupby(["Min. percentage", "#Train models"])[
         "are"].mean().apply(lambda x: x).reset_index()
     evals = evals[~oscar_idx]
     oscar["scaled_set"] = "GPT2-oscar-all"
-    evals = pd.concat(
-        [evals, oscar, c4])
-    plot_models_percentage_hist(evals, eval="are", index="num_models", columns="min_percentage", fig_dir=fig_dir,
+    evals = pd.concat([evals, oscar, c4])
+    plot_models_percentage_hist(evals, eval="are", index="#Train models", columns="Min. percentage", fig_dir=fig_dir,
                                 min_rows=1, show=show)
 
 

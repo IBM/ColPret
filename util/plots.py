@@ -1,11 +1,19 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
 import os
 
 import matplotlib
 
 matplotlib.use('QtAgg')
-import matplotlib.pyplot as plt
 
-import seaborn as sns
+
+def capitalize(txt):
+    if not txt:
+        return txt
+    elif txt[0].isalpha():
+        return txt.capitalize()
+    else:
+        return txt[0] + txt[1:]
 
 
 def capitalize_fig(fig=None, ax=None):
@@ -23,9 +31,9 @@ def capitalize_fig(fig=None, ax=None):
     xlabel = ax.get_xlabel()
     ylabel = ax.get_ylabel()
     title = ax.get_title()
-    ax.set_xlabel(xlabel.capitalize())
-    ax.set_ylabel(ylabel.capitalize())
-    ax.set_title(title.capitalize())
+    ax.set_xlabel(capitalize(xlabel))
+    ax.set_ylabel(capitalize(ylabel))
+    ax.set_title(capitalize(title))
     return fig
 
 
@@ -49,7 +57,7 @@ def plot_pred_actual_compare(metadata, preds=None, perfs=None, show=False):
         x = sub_data["tokens_seen"]
         model_name = sub_data['model_name'].iloc[0]
         assert len(sub_data[
-                       'model_name'].unique()) == 1, f"assumes one model was given in this dataframe, got {len(sub_data['model_name'].unique())}"
+            'model_name'].unique()) == 1, f"assumes one model was given in this dataframe, got {len(sub_data['model_name'].unique())}"
         ax = sns.lineplot(x=x, y=perf, label=f"{model_name}")
         color = ax.lines[-1].get_color()
         sns.lineplot(x=x, y=pred, color=color,  # label=f"predicted {model_name}",
@@ -59,7 +67,8 @@ def plot_pred_actual_compare(metadata, preds=None, perfs=None, show=False):
             idxmax = 0
         else:
             idxmax = in_fit["tokens_seen"].idxmax()
-        sns.scatterplot(x=[x.iloc[idxmax]], y=[pred.iloc[idxmax]], markers="|", color=color, s=100)
+        sns.scatterplot(x=[x.iloc[idxmax]], y=[
+                        pred.iloc[idxmax]], markers="|", color=color, s=100)
         # if show:# TODO delete
         #     plt.show()
     plt.xscale('log')

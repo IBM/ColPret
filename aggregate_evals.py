@@ -558,7 +558,8 @@ def aggregate_gzip(save_dir):
 
         model_df = reduce(lambda left, right: pd.merge(left, right, on=["checkpoint"],
                                                        how="outer"), eval_dfs)
-        model_df["flops"] = model_df["tokens_seen"] * 6 * to_int(num_params)
+        model_df["flops"] = model_df["tokens_seen"] * \
+            6 * to_int(model_df["num_params"])
         model_df["checkpoint"] = np.nan
         model_df["model_type"] = "gzip"
         model_df["arch"] = "dec"
