@@ -45,11 +45,11 @@ FIG_FORMAT = "pdf"
 # # sns.set_theme(font_scale=1.5)
 # sns.set_style("white")
 # Set the style and font scale
-sns.set_theme(style="white", font="Times New Roman", font_scale=1.1)
+sns.set_theme(style="white", font="Times New Roman", font_scale=1.5)
 
 # If Times New Roman is not available, fall back to serif
 if "Times New Roman" not in plt.rcParams["font.family"]:
-    sns.set_theme(style="white", font="serif", font_scale=1.1)
+    sns.set_theme(style="white", font="serif", font_scale=1.5)
 plt.interactive(False)
 
 # func = r"$L(N,D,R_N,R_D)=E + \frac{A}{(U_N + U_N * R_N^* * (1 - e^{(-1*R_N/(R_N^*))}))^\alpha} + \frac{B}{(U_D + U_D * R_D^* * (1 - e^{(-1*R_D/(R_D^*))}))^\beta}$"
@@ -546,10 +546,10 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
     for scaled_set in df["scaled_set"].unique():
         model_by_size = df.query("scaled_set==@scaled_set")[["model_name", "num_params"]].drop_duplicates().sort_values(
             "num_params")
-        largest_model = model_by_size["model_name"].iloc[-1]
+        target_model = model_by_size["model_name"].iloc[-1]
         # to exclude the last one: .iloc[:-1]
         smaller_models = model_by_size["model_name"]
-        if df.query("model_name==@largest_model")["perf"].min() > at_least_loss:
+        if df.query("model_name==@target_model")["perf"].min() > at_least_loss:
             continue
         for percentage in train_percentages:
             for num_model in range(0, len(smaller_models)):
@@ -565,7 +565,7 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
                     train_df = get_model_data(df=df, models=[current_model],
                                               max_percentage=percentage,
                                               min_tokens=cut_beginning)
-                    test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
+                    test_df = get_model_data(df=df, models=[target_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
                     # unique_model_sizes = num_model + 1
                     unique_model_sizes = nunique_model_size(train_df)
@@ -573,7 +573,7 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
                         train_df, test_df, fit_info, abs_are=abs_are)
                     last_pred = predicted[-1] if predicted is not None else None
                     res = (
-                        scaled_set, percentage, mse, are, last_pred, largest_model, unique_model_sizes, current_model,
+                        scaled_set, percentage, mse, are, last_pred, target_model, unique_model_sizes, current_model,
                         train_model_size,
                         tuple(popt) if popt is not None else None)
                     cache[cache_id] = res
@@ -997,7 +997,7 @@ def aggregate_hist(evals, eval, fig_dir, show, exp_name="", iso=None, eval_conto
         scales = np.unique(
             [test / train for test, train in zip(largest, largest_train)])
         scales = -np.sort(-scales)
-        scales = [int(scale) if scale > 1 else round(scales, 2)
+        scales = [int(scale) if scale > 1 else round(scale, 2)
                   for scale in scales]
         special_last = [
             bin_labels[-1]+f" \n(<X{scales[len(bin_labels)-1]})"] if len(scales) >= len(bin_labels) else ["9empty_num"+str(x) for x in range(len(bin_labels) - len(scales))]
@@ -1083,7 +1083,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
              train_percentages=(0.1, 0.2, 0.3, 0.4, 0.5,
                                 0.6, 0.7, 0.8, 0.9, 1),
              experiment_name="", iter_models=None, iter_axis_name="model_selection_metadata",
-             abs_are=True, cut_beginning=10 ** 10, fit_info: FitInfo = ChinchillaFit, scale_down=False, verbose=False):
+             abs_are=True, cut_beginning=10 ** 10, fit_info: FitInfo = ChinchillaFit, scale_down=False, annot=False, verbose=False):
     """
     Predict with each M models given x percentage of training the end of the last model's loss
     Args:
@@ -1113,7 +1113,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     os.makedirs(fig_dir, exist_ok=True)
 
     cache_name = f"hist_fit_{abs_are}_" + LossType.join(
-        loss_types, "_") + f"{fit_info.name}_cut{cut_beginning}_{experiment_name}"
+        loss_types, "_") + f"{fit_info.name}_cut{cut_beginning}_{experiment_name}_{scale_down}"
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
     evals = []
@@ -1122,15 +1122,19 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     for scaled_set in tqdm.tqdm(df["scaled_set"].unique(), desc="Scaling families"):
         model_by_size = df.query("scaled_set==@scaled_set")[["model_name", "num_params"]].drop_duplicates().sort_values(
             "num_params")
+
+        largest_model = model_by_size["model_name"].iloc[-1]
         if scale_down:
             model_by_size = model_by_size.iloc[::-1]
-        largest_model = model_by_size["model_name"].iloc[-1]
+            if "pythia" in scaled_set:
+                model_by_size = model_by_size[1:]
+        target_model = model_by_size["model_name"].iloc[-1]
         smaller_models = model_by_size["model_name"].iloc[:-1]
         if df.query("model_name==@largest_model")["perf"].min() > at_least_loss:
             continue
         for percentage in train_percentages:
             for num_train_models in get_model_nums(len(smaller_models)):
-                for train_models, iter_data in iter_models(df=df, scaled_set=scaled_set, percentage=percentage, num_train_models=num_train_models, train_models=smaller_models, largest_model=largest_model):
+                for train_models, iter_data in iter_models(df=df, scaled_set=scaled_set, percentage=percentage, num_train_models=num_train_models, train_models=smaller_models, target_model=target_model):
                     train_models = list(train_models)
                     cache_id = scaled_set + \
                         str(num_train_models) + str(percentage) + \
@@ -1145,7 +1149,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                                                   max_percentage=percentage,
                                                   min_tokens=cut_beginning)
                         test_df = get_model_data(
-                            df=df, models=[largest_model], min_percentage=test_percentage)
+                            df=df, models=[target_model], min_percentage=test_percentage)
                         unique_model_sizes = nunique_model_size(train_df)
                         flops = train_df["flops"].sum()
                         mse, are, train_are, predicted, popt = single_scaling(train_df, test_df, fit_info, abs_are=abs_are,
@@ -1153,7 +1157,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
                         last_pred = predicted[-1] if predicted is not None else None
                         res = (
-                            scaled_set, percentage, mse, are, last_pred, largest_model, unique_model_sizes,
+                            scaled_set, percentage, mse, are, last_pred, target_model, unique_model_sizes,
                             train_models[-1], flops, iter_data,
                             tuple(popt) if popt is not None else None)
                         if verbose:
@@ -1174,7 +1178,8 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     print(
         f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['scaled_set']}")
     eval = "are"
-    plot_models_percentage_hist(evals, eval=eval, fig_dir=fig_dir, show=show)
+    plot_models_percentage_hist(
+        evals, eval=eval, fig_dir=fig_dir, show=show, annot=annot)
 
     scaled_set_metadata = get_per_model_metadata(df, "scaled_set")
     model_name_metadata = get_per_model_metadata(df, "model_name")

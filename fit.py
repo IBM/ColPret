@@ -42,8 +42,9 @@ if __name__ == '__main__':
     fit_info = ChinchillaFit
     # hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
     #          fit_info=fit_info, cut_beginning=10 ** 10, train_percentages=[1], iter_models=iter_model_sizes)
+    force = True
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "scale_down"), at_least_loss=10, abs_are=abs_are,
-             fit_info=fit_info, verbose=verbose, experiment_name="scale_down", scale_down=True)
+             fit_info=fit_info, verbose=verbose, experiment_name="scale_down", scale_down=True, annot=True)
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=10 ** 10, verbose=verbose)
     experiment_name = "num_to_size"
