@@ -42,16 +42,15 @@ if __name__ == '__main__':
     fit_info = ChinchillaFit
     # hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
     #          fit_info=fit_info, cut_beginning=10 ** 10, train_percentages=[1], iter_models=iter_model_sizes)
-    force = True
-    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "scale_down"), at_least_loss=10, abs_are=abs_are,
-             fit_info=fit_info, verbose=verbose, experiment_name="scale_down", scale_down=True, annot=True)
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=10 ** 10, verbose=verbose)
+    minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10,
+                abs_are=abs_are, fit_info=fit_info)
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "scale_down"), at_least_loss=10, abs_are=abs_are,
+             fit_info=fit_info, verbose=verbose, experiment_name="scale_down", scale_down=True, annot=True)
     experiment_name = "num_to_size"
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, experiment_name), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=10 ** 10, train_percentages=[1], iter_models=iter_model_sizes, experiment_name=experiment_name, iter_axis_name="Largest Model Parameters (Scale up predicted)")
-    minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10,
-                abs_are=abs_are, fit_info=fit_info)
     closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
                                   fit_info=fit_info, num_train_models=3)
     closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,

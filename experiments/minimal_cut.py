@@ -74,7 +74,8 @@ def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), 
     evals = evals[~oscar_idx]
     oscar["scaled_set"] = "GPT2-oscar-all"
     evals = pd.concat([evals, oscar, c4])
-    plot_models_percentage_hist(evals, eval="are", index="#Train models", columns="Min. percentage", fig_dir=fig_dir,
+
+    plot_models_percentage_hist(evals, eval="are", index="#Train models", columns="Min. percentage", fig_dir=fig_dir, reverse_x=True,
                                 min_rows=1, show=show)
 
 

@@ -23,6 +23,7 @@ from fitting_funcs import DATA_FIT_COLS, TestFit, FitInfo, ChinchillaFit, Databl
 from util.cache import get_cache, save_cache
 from util.plots import plot_pred_actual_compare, capitalize_fig
 import matplotlib.font_manager as fm
+import itertools
 
 matplotlib.use('QtAgg')
 FIG_FORMAT = "pdf"
@@ -490,14 +491,14 @@ def mean_normalized_distance(predicted, target, abs):
 
 
 def plot_models_percentage_hist(evals, eval, fig_dir, iterate_over="scaled_set", index="#Train models", annot=False,
-                                columns="percentage", vmin=0, vmax=0.35, min_rows=2, eval_contours=None, contour_kind="steps", iso: str = None, metadata=None,
+                                columns="percentage", vmin=0, vmax=0.35, min_rows=2, eval_contours=None, contour_kind="steps", iso: str = None, metadata=None, reverse_x=False,
                                 show=False, verbose=False):
     for scaled_set in evals[iterate_over].unique():
         subdf = evals.query(f"@{iterate_over}=={iterate_over}")
         plot_heatmap(evals=subdf, eval=eval, fig_dir=fig_dir, show=show, title="", metadata=metadata, annot=annot,
                      #  title=scaled_set,
                      fig_name=f"hist-perc-{eval}_{scaled_set}.{FIG_FORMAT}", column=columns, index=index, vmin=vmin, vmax=vmax,
-                     eval_contours=eval_contours, iso=iso, contour_kind=contour_kind,
+                     eval_contours=eval_contours, iso=iso, contour_kind=contour_kind, reverse_x=reverse_x,
                      min_rows=min_rows, verbose=verbose)
     return
 
@@ -527,6 +528,7 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
                        train_percentages=(
                            0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1),
                        abs_are=True, verbose=False):
+    set_fonts(1.5)
     cut_beginning = 10 ** 10
     fit_info = bound_params(ChinchillaFit, [6.255414, None, None, 0.3526596])
     # fit_info = Chinchilla1ModelFit
@@ -600,10 +602,41 @@ def hist_one_model_fit(df, force=False, fig_dir=None, show=False, loss_types=(Lo
     #    metadata=get_per_model_metadata(df, "scaled_set"))
 
 
-def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_set", index="#Train models",
-               columns="percentage", vmin=0, vmax=1, min_rows=2, metadata=None, labels="", x_label="", y_label="",
+def rename_label(label):
+    if label == "dec":
+        label = "Decoder"
+    elif label == "enc":
+        label = "Encoder"
+    elif label == "enc-dec":
+        label = "Encoder-\nDecoder"
+    elif label == "gpt3":
+        label = "GPT3"
+    elif label == "t5-pile":
+        label = "T5-pile"
+    else:
+        return label
+        # raise NotImplemented(
+        #     "choose how the name would apear in the legend")
+    return label
+
+
+def sort_legend():
+    ax = plt.gca()
+    # Create the legend
+    handles, labels = ax.get_legend_handles_labels()
+    # Sort legend entries
+    sorted_labels_handles = sorted(
+        zip(labels, handles), key=lambda x: x[0])
+    sorted_labels, sorted_handles = zip(*sorted_labels_handles)
+    return sorted_labels, sorted_handles
+
+
+def plot_1popt(evals, eval, fig_dir, popty, name, iterate_over="scaled_set", index="#Train models",
+               label2marker=dict(),    label2color=dict(),               columns="percentage", vmin=0, vmax=1, min_rows=2, metadata=None, labels="", x_label="", y_label="",
                show=False):
     sns.set_palette(sns.color_palette("colorblind"))
+
+    set_fonts(2.5)
     max_dict = evals.groupby(iterate_over)[[index, columns]].max().to_dict()
     relevant = evals[evals.apply(
         lambda row: row[index] == max_dict[index][row[iterate_over]] and row[columns] == max_dict[columns][
@@ -611,32 +644,131 @@ def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_se
     relevant = relevant.dropna(subset="popt")
 
     if labels == "model_type":
-        labels = [metadata["model_type"][model]
+        labels = [rename_label(metadata["model_type"][model])
                   for model in relevant[iterate_over]]
         all_labels = list(sorted(set(labels)))
         markers_options = ['.', 'o', 's', '^', 'v', '<', '>', 'p', '*',
                            'h', 'H', '+', 'x', 'D', 'd']  # ["o", "v", "s", "P", "X","D"]
         markers_and_labels = [(markers_options[all_labels.index(label)], label)
                               for label in labels]
-    else:
-        def rename_label(label):
-            if label == "dec":
-                label = "Decoder"
-            elif label == "enc":
-                label = "Encoder"
-            elif label == "enc-dec":
-                label = "Encoder-Decoder"
-            else:
-                raise NotImplemented(
-                    "choose how the name would apear in the legend")
-            return label
+    elif labels == "arch":
+
         labels = [rename_label(metadata["arch"][model])
                   for model in relevant[iterate_over]]
         all_labels = list(sorted(set(labels)))
         markers_options = ["o", "v", "s", "P", "X"]
         markers_and_labels = [(markers_options[all_labels.index(label)], label)
                               for label in labels]
+    else:
+        labels = [""] * len(relevant[iterate_over])
+        all_labels = list(sorted(set(labels)))
+        markers_options = ["o"]
+        markers_and_labels = [(markers_options[all_labels.index(label)], label)
+                              for label in labels]
 
+    # model scale params
+    ys = [popt[popty] for popt in relevant["popt"]]
+
+    # Create a list of tuples containing (y-value, marker, label)
+    data = [(y, marker, label)
+            for y, (marker, label) in zip(ys, markers_and_labels)]
+
+    # Sort the data based on y-values in descending order
+    sorted_data = sorted(data, key=lambda x: x[0], reverse=True)
+
+    seen = 0
+    for marker, group in itertools.groupby(sorted_data, key=lambda x: x[1]):
+        group_data = list(group)
+        y = [item[0] for item in group_data]
+        label = group_data[0][2]  # All items in the group have the same label
+        x = seen + np.arange(len(y))
+        seen += len(y)
+        if label not in label2color:
+            label2marker[label] = marker
+            ax = plt.scatter(x=x, y=y, marker=marker, label=label)
+            label2color[label] = ax.get_facecolor()
+        else:
+            color = label2color[label]
+            marker = label2marker[label]
+            ax = plt.scatter(x=x, y=y, marker=marker, color=color)
+
+    # # model scale params
+    # ys = [popt[popty] for popt in relevant["popt"]]
+    # seen = 0
+    # for marker, label in sorted(set(markers_and_labels)):
+    #     y = [val for val, (mar, _) in zip(
+    #         ys, markers_and_labels) if mar == marker]
+    #     x = seen+np.arange(len(y))
+    #     seen += len(y)
+    #     plt.scatter(x=x, y=y, marker=marker, label=label)
+    # if not markers_and_labels:
+    #     plt.scatter(x=x, y=y, marker=marker, label=label)
+
+    if x_label:
+        plt.xlabel(xlabel=x_label)
+    else:
+        plt.xlabel("Scaled Model Family (Discreet)")
+    plt.xticks([])
+    if y_label:
+        plt.ylabel(ylabel=y_label)
+
+    capitalize_fig()
+
+    sns.despine(bottom=True)
+    if fig_dir:
+        fig_name = f"popts_{name}.{FIG_FORMAT}"
+
+        no_leg_dir = os.path.join(fig_dir, "no_legend")
+        os.makedirs(no_leg_dir, exist_ok=True)
+        plt.savefig(os.path.join(no_leg_dir,
+                    fig_name), bbox_inches="tight")
+        if labels and labels[0]:
+            sorted_labels, sorted_handles = sort_legend()
+
+            # Update legend with sorted entries
+            if len(sorted_handles) > 5:
+                plt.legend(sorted_handles, sorted_labels,
+                           loc='center left', bbox_to_anchor=(1, 0.5), fontsize=16)
+            else:
+                plt.legend(sorted_handles, sorted_labels,
+                           loc='center left', bbox_to_anchor=(1, 0.5))
+            # plt.legend()
+
+            plt.savefig(os.path.join(
+                fig_dir, fig_name), bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.clf()
+
+
+def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_set", index="#Train models",
+               columns="percentage", vmin=0, vmax=1, min_rows=2, metadata=None, labels="", x_label="", y_label="", label2color=dict(), label2marker=dict(),
+               show=False):
+    sns.set_palette(sns.color_palette("colorblind"))
+    set_fonts(2.5)
+    max_dict = evals.groupby(iterate_over)[[index, columns]].max().to_dict()
+    relevant = evals[evals.apply(
+        lambda row: row[index] == max_dict[index][row[iterate_over]] and row[columns] == max_dict[columns][
+            row[iterate_over]], axis=1)]
+    relevant = relevant.dropna(subset="popt")
+
+    if labels == "model_type":
+        labels = [rename_label(metadata["model_type"][model])
+                  for model in relevant[iterate_over]]
+        all_labels = list(sorted(set(labels)))
+        markers_options = ['.', 'o', 's', '^', 'v', '<', '>', 'p', '*',
+                           'h', 'H', '+', 'x', 'D', 'd']  # ["o", "v", "s", "P", "X","D"]
+        markers_and_labels = [(markers_options[all_labels.index(label)], label)
+                              for label in labels]
+    elif labels == "arch":
+        labels = [rename_label(metadata["arch"][model])
+                  for model in relevant[iterate_over]]
+        all_labels = list(sorted(set(labels)))
+        markers_options = ["o", "v", "s", "P", "X"]
+        markers_and_labels = [(markers_options[all_labels.index(label)], label)
+                              for label in labels]
+    else:
+        raise NotImplementedError
     # model scale params
     xs = [popt[poptx] for popt in relevant["popt"]]
     ys = [popt[popty] for popt in relevant["popt"]]
@@ -647,21 +779,51 @@ def plot_2popt(evals, eval, fig_dir, poptx, popty, name, iterate_over="scaled_se
             xs, markers_and_labels) if mar == marker]
         y = [val for val, (mar, _) in zip(
             ys, markers_and_labels) if mar == marker]
-        plt.scatter(x=x, y=y, marker=marker, label=label)
+
+        if label not in label2color:
+            label2marker[label] = marker
+            ax = plt.scatter(x=x, y=y, marker=marker, label=label)
+            label2color[label] = ax.get_facecolor()
+        else:
+            color = label2color[label]
+            marker = label2marker[label]
+            ax = plt.scatter(x=x, y=y, marker=marker, color=color, label=label)
     if x_label:
         plt.xlabel(xlabel=x_label)
     if y_label:
         plt.ylabel(ylabel=y_label)
     capitalize_fig()
 
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     sns.despine()
     if fig_dir:
-        plt.savefig(os.path.join(
-            fig_dir, f"popts_{name}.{FIG_FORMAT}"), bbox_inches="tight")
+        fig_name = f"popts_{name}.{FIG_FORMAT}"
+
+        no_leg_dir = os.path.join(fig_dir, "no_legend")
+        os.makedirs(no_leg_dir, exist_ok=True)
+        plt.savefig(os.path.join(no_leg_dir,
+                    fig_name), bbox_inches="tight")
+
+        if labels and labels[0]:
+
+            if len(labels) > 5:
+                plt.legend(loc='center left',
+                           bbox_to_anchor=(1, 0.5), fontsize=16)
+            else:
+                plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+
+            plt.savefig(os.path.join(
+                fig_dir, fig_name), bbox_inches="tight")
     if show:
         plt.show()
     plt.clf()
+
+
+def set_fonts(mult_by):
+    sns.set_theme(style="white", font="Times New Roman", font_scale=mult_by)
+
+    # If Times New Roman is not available, fall back to serif
+    if "Times New Roman" not in plt.rcParams["font.family"]:
+        sns.set_theme(style="white", font="serif", font_scale=mult_by)
 
 
 def sort_pivot(pivot):
@@ -798,7 +960,7 @@ def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
                  index: str = "#Train models",
                  column: str = "percentage", eval_contours=None, contour_kind="steps", iso: str = None, vmin: float = 0,
                  vmax: float = 0.35,
-                 min_rows: int = None,
+                 min_rows: int = None, reverse_x=True,
                  ascending_index: bool = True, annot: bool = True, log_scale: bool = False, verbose=False):
     print(f"plotting {os.path.join(fig_dir, fig_name)}")
     evals = evals.drop_duplicates(subset=[index, column])
@@ -889,7 +1051,10 @@ def plot_heatmap(evals, eval, title, fig_dir, fig_name, show, metadata=None,
         # # Add data points to the plot
         # for x_val, y_val in zip(x_iso, y_iso):
         #     plt.text(x_val, y_val, str((x_val, y_val)), ha='left', va='bottom')
-
+    if reverse_x:
+        ax = plt.gca()
+        ax.invert_xaxis()
+        ax.set_xlabel("←"+ax.get_xlabel())
     if title:
         plt.gca().set_title(title)
     capitalize_fig(heatmap)
@@ -1122,16 +1287,20 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
     for scaled_set in tqdm.tqdm(df["scaled_set"].unique(), desc="Scaling families"):
         model_by_size = df.query("scaled_set==@scaled_set")[["model_name", "num_params"]].drop_duplicates().sort_values(
             "num_params")
-
-        largest_model = model_by_size["model_name"].iloc[-1]
         if scale_down:
             model_by_size = model_by_size.iloc[::-1]
-            if "pythia" in scaled_set:
+            if "pythia" in scaled_set and len(model_by_size):
                 model_by_size = model_by_size[1:]
-        target_model = model_by_size["model_name"].iloc[-1]
-        smaller_models = model_by_size["model_name"].iloc[:-1]
+
+        if len(model_by_size["model_name"]) < 1:
+            continue
+
+        largest_model = model_by_size["model_name"].iloc[-1]
         if df.query("model_name==@largest_model")["perf"].min() > at_least_loss:
             continue
+
+        target_model = model_by_size["model_name"].iloc[-1]
+        smaller_models = model_by_size["model_name"].iloc[:-1]
         for percentage in train_percentages:
             for num_train_models in get_model_nums(len(smaller_models)):
                 for train_models, iter_data in iter_models(df=df, scaled_set=scaled_set, percentage=percentage, num_train_models=num_train_models, train_models=smaller_models, target_model=target_model):
@@ -1183,6 +1352,7 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
 
     scaled_set_metadata = get_per_model_metadata(df, "scaled_set")
     model_name_metadata = get_per_model_metadata(df, "model_name")
+
     subfig_dir = os.path.join(fig_dir, "agg_hist_per_model_type")
     flops_subfig_dir = os.path.join(subfig_dir, "flops")
     if len(train_percentages) > 1:
@@ -1216,21 +1386,30 @@ def hist_fit(df, force=False, fig_dir=None, show=False, loss_types=(LossType.PER
                        metadata=model_name_metadata, vmin=0, vmax=0.35, column=iter_axis_name)
     if evals["popt"].dropna().empty:
         return
+
+    label2marker = {}
+    label2color = {}
+    plot_1popt(evals, popty=2, name="intercept", eval=eval, fig_dir=fig_dir, show=show, y_label="$E$",
+               metadata=scaled_set_metadata, labels="arch", label2color=label2color, label2marker=label2marker)
+    plot_1popt(evals, popty=2, name="intercept_model_type", eval=eval, fig_dir=fig_dir, show=show, y_label="$E$",
+               metadata=scaled_set_metadata, labels="model_type", label2color=label2color, label2marker=label2marker)
+    plot_1popt(evals, popty=2, name="intercept_none", eval=eval, fig_dir=fig_dir, show=show, y_label="$E$",
+               metadata=scaled_set_metadata, labels="", label2color=label2color, label2marker=label2marker)
     if len(evals["popt"].dropna().iloc[0]) > 3:
         plot_2popt(evals, poptx=0, popty=3, name="scale", eval=eval, fig_dir=fig_dir, show=show, x_label="A", y_label="$\\alpha$",
-                   metadata=scaled_set_metadata)
+                   metadata=scaled_set_metadata, labels="arch", label2color=label2color, label2marker=label2marker)
         plot_2popt(evals, poptx=0, popty=3, name="scale_model_type", eval=eval, fig_dir=fig_dir, show=show, x_label="A", y_label="$\\alpha$",
-                   metadata=scaled_set_metadata, labels="model_type")
+                   metadata=scaled_set_metadata, labels="model_type", label2color=label2color, label2marker=label2marker)
     if len(evals["popt"].dropna().iloc[0]) > 4:
         plot_2popt(evals, poptx=1, popty=4, name="tokens", eval=eval, fig_dir=fig_dir, show=show, x_label="B", y_label="$\\beta$",
-                   metadata=scaled_set_metadata)
+                   metadata=scaled_set_metadata, labels="arch", label2color=label2color, label2marker=label2marker)
         plot_2popt(evals, poptx=1, popty=4, name="tokens_model_type", eval=eval, fig_dir=fig_dir, show=show, x_label="B", y_label="$\\beta$",
-                   metadata=scaled_set_metadata, labels="model_type")
+                   metadata=scaled_set_metadata, labels="model_type", label2color=label2color, label2marker=label2marker)
     if len(evals["popt"].dropna().iloc[0]) > 4:
         plot_2popt(evals, poptx=3, popty=4, name="alpha_beta", eval=eval, fig_dir=fig_dir, show=show, x_label="$\\alpha$", y_label="$\\beta$",
-                   metadata=scaled_set_metadata)
+                   metadata=scaled_set_metadata, labels="arch", label2color=label2color, label2marker=label2marker)
         plot_2popt(evals, poptx=3, popty=4, name="alpha_beta_model_type", eval=eval, fig_dir=fig_dir, show=show, x_label="$\\alpha$", y_label="$\\beta$",
-                   metadata=scaled_set_metadata, labels="model_type")
+                   metadata=scaled_set_metadata, labels="model_type", label2color=label2color, label2marker=label2marker)
     opts_explained(evals, eval=eval, fig_dir=fig_dir, show=show,
                    metadata=scaled_set_metadata)
 
