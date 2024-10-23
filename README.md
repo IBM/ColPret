@@ -1,4 +1,5 @@
 # ColPret
+[Paper](https://arxiv.org/abs/2410.11840): https://arxiv.org/abs/2410.11840  
 Efficient Scaling laws and collaborative pretraining.
 
 # data
