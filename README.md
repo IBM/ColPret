@@ -5,7 +5,7 @@ Efficient Scaling laws and collaborative pretraining.
 # data
 To just get the data use
 ```
-import get_data from read_data 
+from util.read_data import get_data
 all_df = get_data()
 ```
 The columns you may expect in it are DATA_AWARE_DF_COLS and ARCH_AWARE_DF_COLS in read_data.py
