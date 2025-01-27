@@ -1,20 +1,20 @@
-import os
-
-from experiments.num_to_size import iter_model_sizes
-from experiments.minimal_cut import minimal_cut
-from experiments.predict_last import PredictBest, PredictLast
-from experiments.predict_with_size_or_number import closer_in_scale_is_predictive, larger_is_predictable, \
-    predict_smallest
-from fitting_funcs import MultFit, ChinchillaFit, PCAFit, Manual2Fit, ChinchillaTorchFit, ChinchillaTorchGuessFit
 from util.fit_utils import metric_per_column, get_perf_path, get_data_path, hist_fit, \
     hist_one_model_fit, get_perf_df, LossType, get_per_model_metadata, scale_fit_per_model
+from fitting_funcs import MultFit, ChinchillaFit, PCAFit, Manual2Fit, ChinchillaTorchFit, ChinchillaTorchGuessFit
+from experiments.predict_with_size_or_number import closer_in_scale_is_predictive, larger_is_predictable, \
+    predict_smallest
+from experiments.predict_last import PredictBest, PredictLast
+from experiments.minimal_cut import minimal_cut
+from experiments.num_to_size import iter_model_sizes
+import os
 from util.read_data import get_data
+
 
 if __name__ == '__main__':
     # acquire data
     force = True
     force = False
-    cache_dir = '/Users/lc/PycharmProjects/CLPR/cache/'
+    cache_dir = '/Users/lc/PycharmProjects/CLPR/test_cache/'
     data_path = get_data_path(cache_dir)
 
     loss_types = (LossType.PERP, LossType.LOSS)
@@ -39,29 +39,29 @@ if __name__ == '__main__':
     # df = df[df["domain"] == "LM"]
     abs_are = True
     verbose = False
+
+    force = False
     fit_info = ChinchillaFit
     # hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
     #          fit_info=fit_info, cut_beginning=10 ** 10, train_percentages=[1], iter_models=iter_model_sizes)
-    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
-             fit_info=fit_info, cut_beginning=10 ** 10, verbose=verbose)
-    minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10,
-                abs_are=abs_are, fit_info=fit_info)
+    test_percentage = 1
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_test1"), at_least_loss=10, abs_are=abs_are,
+             fit_info=fit_info, cut_beginning=10 ** 10, verbose=verbose, test_percentage=test_percentage)
+
+    force = False
+
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "scale_down"), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, verbose=verbose, experiment_name="scale_down", scale_down=True, annot=True)
     experiment_name = "num_to_size"
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, experiment_name), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=10 ** 10, train_percentages=[1], iter_models=iter_model_sizes, experiment_name=experiment_name, iter_axis_name="Largest Model Parameters (Scale up predicted)")
+    force = True
     closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
                                   fit_info=fit_info, num_train_models=3)
     closer_in_scale_is_predictive(df, force=force, fig_dir=fig_dir, at_least_loss=10, abs_are=abs_are,
                                   fit_info=fit_info, num_train_models=4)
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_no_cut"), at_least_loss=10, abs_are=abs_are,
              fit_info=fit_info, cut_beginning=0, verbose=verbose)
-    hist_one_model_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_1m"), at_least_loss=10, abs_are=abs_are,
-                       verbose=verbose)
-    scale_fit_per_model(df, force=force, fig_dir=os.path.join(
-        fig_dir, "per_model"), at_least_loss=10, abs_are=abs_are)
-
     predict_smallest(df, force=force, fig_dir=fig_dir,
                      at_least_loss=10, abs_are=abs_are, fit_info=fit_info)
     larger_is_predictable(df, force=force, fig_dir=fig_dir,
@@ -73,6 +73,15 @@ if __name__ == '__main__':
     hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "best"), at_least_loss=10, abs_are=abs_are,
              fit_info=PredictBest, verbose=True)
 
+    force = False
+    hist_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist"), at_least_loss=10, abs_are=abs_are,
+             fit_info=fit_info, cut_beginning=10 ** 10, verbose=verbose)
+    minimal_cut(df, force=force, fig_dir=fig_dir, at_least_loss=10,
+                abs_are=abs_are, fit_info=fit_info)
+    scale_fit_per_model(df, force=force, fig_dir=os.path.join(
+        fig_dir, "per_model"), at_least_loss=10, abs_are=abs_are)
+    hist_one_model_fit(df, force=force, fig_dir=os.path.join(fig_dir, "hist_1m"), at_least_loss=10, abs_are=abs_are,
+                       verbose=verbose)
     # # fit_on_smaller(df,force)
     # # scaling_scaling_law(df, force)
     # # cross_validate(df,force)

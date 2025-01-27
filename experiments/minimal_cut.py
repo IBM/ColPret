@@ -45,10 +45,10 @@ def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), 
                     test_df = get_model_data(df=df, models=[largest_model], min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
 
-                    mse, are, train_are, predicted, popt = single_scaling(
+                    mse, are, huber, train_are, predicted, popt = single_scaling(
                         train_df, test_df, fit_info, abs_are=abs_are)
                     last_pred = predicted[-1] if predicted is not None else None
-                    res = (scaled_set, min_percentage, mse, are, last_pred, largest_model, num_train_models + 1,
+                    res = (scaled_set, min_percentage, mse, are, huber,  last_pred, largest_model, num_train_models + 1,
                            tuple(popt) if popt is not None else None)
                     cache[cache_id] = res
                     print(
@@ -57,12 +57,12 @@ def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), 
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
 
-    evals = pd.DataFrame(evals, columns=["scaled_set", "Min. percentage", "mse", "are", "last_pred", "largest_model",
+    evals = pd.DataFrame(evals, columns=["scaled_set", "Min. percentage", "mse", "are", "huber", "last_pred", "largest_model",
                                          "#Train models", "params"])
     print(
         f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['largest_model']}")
     evals = evals.loc[:, ["scaled_set",
-                          "Min. percentage", "are", "#Train models"]]
+                          "Min. percentage", "are", "huber", "#Train models"]]
     c4_idx = evals["scaled_set"].apply(lambda x: "GPT2-c4" in x)
     c4 = evals[c4_idx].groupby(["Min. percentage", "#Train models"])[
         "are"].mean().apply(lambda x: x).reset_index()
@@ -76,6 +76,8 @@ def minimal_cut(df, force=False, fig_dir=None, show=False, loss_types=("perp"), 
     evals = pd.concat([evals, oscar, c4])
 
     plot_models_percentage_hist(evals, eval="are", index="#Train models", columns="Min. percentage", fig_dir=fig_dir, reverse_x=True,
+                                min_rows=1, show=show)
+    plot_models_percentage_hist(evals, eval="huber", index="#Train models", columns="Min. percentage", fig_dir=fig_dir, reverse_x=True,
                                 min_rows=1, show=show)
 
 

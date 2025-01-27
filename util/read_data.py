@@ -176,7 +176,8 @@ def get_overtrain():
     downstream_df.columns = [col.replace(
         "err", "acc") for col in downstream_df.columns]
     df = df.combine_first(downstream_df).reset_index(drop=True)
-    loss_cols = [col for col in df.columns if "loss" in col or "acc" in col]
+    loss_cols = [
+        col for col in df.columns if ("loss" in col or "acc" in col) and "cols" not in col]
     df["loss_cols"] = df.apply(lambda row: tuple(
         col for col in loss_cols if pd.notna(row[col])), axis=1)
 
@@ -282,7 +283,7 @@ def get_datablations():
     df["domain"] = "LM"
     df["arch"] = "dec"
     df["checkpoint"] = "missing? but should exist https://github.com/huggingface/datablations#download"
-    df["loss_cols"] = [("loss",)] * len(df)
+    df["loss_cols"] = [("openLM_loss",)] * len(df)
     df["seed"] = "0"
 
     # from util.fit_utils import LossType
@@ -720,7 +721,7 @@ def get_mad():
     df["model_type"] = df.apply(lambda row: row['scaled_set'].lower(), axis=1)
     df["data"] = "pile"
     df["loss_cols"] = [["loss"]] * len(df)
-    return df
+    return [df]
 
 
 def get_red_pajama():
@@ -771,8 +772,9 @@ def get_red_pajama():
     df['checkpoint'] = checkpoints
     df['epochs'] = 1
     df['original_paper'] = "blog-redpajama-7b"
-    test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
+    # test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
+    return dfs
 
 
 def get_data(save_in=None, force=False) -> pd.DataFrame:
@@ -835,7 +837,7 @@ def get_data(save_in=None, force=False) -> pd.DataFrame:
     test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs += new_dfs
 
-    new_dfs = get_redpajama()
+    new_dfs = get_red_pajama()
     test_dfs(new_dfs,  DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs += new_dfs
 

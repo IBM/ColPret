@@ -10,7 +10,7 @@ if True:
     from fitting_funcs import ChinchillaFit, FitInfo
 
 
-def iter_model_sizes(df, scaled_set, percentage, num_train_models, train_models, largest_model):
+def iter_model_sizes(df, scaled_set, percentage, num_train_models, train_models, target_model):
     for last in range(num_train_models, len(train_models) + 1):
         model_list = list(train_models)[last-num_train_models:last]
 
@@ -19,7 +19,7 @@ def iter_model_sizes(df, scaled_set, percentage, num_train_models, train_models,
             "@largest_train_model==model_name")[["num_params"]].drop_duplicates().iloc[0].iloc[0]
         largest_train_size = (largest_train_size)/1e9
         largest_size = df.query(
-            "@largest_model==model_name")[["num_params"]].drop_duplicates().iloc[0].iloc[0]
+            "@target_model==model_name")[["num_params"]].drop_duplicates().iloc[0].iloc[0]
         largest_size = (largest_size)/1e9
         scale = float(largest_size)/float(largest_train_size)
         scale = int(scale) if scale > 1 else round(scale, 2)

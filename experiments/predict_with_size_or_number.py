@@ -45,10 +45,10 @@ def predict_smallest(df, force=False, fig_dir=None, show=False, loss_types=("per
                 test_df = get_model_data(df=df, models=[smallest_model], min_percentage=test_percentage,
                                          min_tokens=cut_beginning)
                 unique_model_sizes = nunique_model_size(train_df)
-                mse, are, train_are, predicted, popt = single_scaling(
+                mse, are, huber, train_are, predicted, popt = single_scaling(
                     train_df, test_df, fit_info, abs_are)
                 last_pred = predicted[-1] if predicted is not None else None
-                res = (scaled_set, mse, are, last_pred, smallest_model, unique_model_sizes,
+                res = (scaled_set, mse, are, huber, last_pred, smallest_model, unique_model_sizes,
                        tuple(popt) if popt is not None else None)
                 cache[cache_id] = res
                 print(
@@ -56,11 +56,13 @@ def predict_smallest(df, force=False, fig_dir=None, show=False, loss_types=("per
                 evals.append(res)
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
-    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "are", "last_pred", "smallest_model",
+    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "are", "huber", "last_pred", "smallest_model",
                                          "#Train models", "params"])
     # print(f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['largest_model']}")
     evals = evals.loc[:, ["scaled_set", "are", "#Train models"]]
     plot_models_percentage_hist(evals, eval="are", index="#Train models", columns="scaled_set", fig_dir=fig_dir,
+                                min_rows=1, show=show)
+    plot_models_percentage_hist(evals, eval="huber", index="#Train models", columns="scaled_set", fig_dir=fig_dir,
                                 min_rows=1, show=show)
 
 
@@ -80,7 +82,7 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
         num_train_models, include_test, fit_info.name]])
     cache = get_cache(cache_name, force)
     df = df.dropna(subset=["scaled_set"])
-    resulting_cols = ["scaled_set", "percentage", "mse", "are", "last_pred", "test_model",
+    resulting_cols = ["scaled_set", "percentage", "mse", "are", "huber", "last_pred", "test_model",
                       "#Train models", "largest_train_model", "flops", "num_params", "popt"]
     evals = []
     # # skip families with one model
@@ -117,12 +119,12 @@ def closer_in_scale_is_predictive(df, force=False, fig_dir=None, show=False, los
                     test_df = get_model_data(df=df, models=[largest_model],
                                              min_percentage=test_percentage,
                                              min_tokens=cut_beginning)
-                    mse, are, train_are, predicted, popt = single_scaling(
+                    mse, are, huber, train_are, predicted, popt = single_scaling(
                         train_df, test_df, fit_info, abs_are)
                     unique_model_sizes = nunique_model_size(train_df)
                     last_pred = predicted[-1] if predicted is not None else None
                     flops = train_df["flops"].sum()
-                    res = (scaled_set, percentage, mse, are, last_pred, largest_model, unique_model_sizes,
+                    res = (scaled_set, percentage, mse, are, huber, last_pred, largest_model, unique_model_sizes,
                            train_models[-1], flops, num_params,
                            tuple(popt) if popt is not None else None)
                     cache[cache_id] = res
@@ -212,12 +214,15 @@ def larger_is_predictable(df, force=False, fig_dir=None, show=False, loss_types=
         save_cache(cache, cache_name)
     save_cache(cache, cache_name)
 
-    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "are", "last_pred", "largest_model",
+    evals = pd.DataFrame(evals, columns=["scaled_set", "mse", "are", "huber", "last_pred", "largest_model",
                                          "#Train models", "num_params", "params"])
     print(
         f"models with max normalized distance: {evals.sort_values(by='are').dropna()[-10:]['largest_model']}")
-    evals = evals.loc[:, ["scaled_set", "are", "#Train models", "num_params"]]
+    evals = evals.loc[:, ["scaled_set", "are",
+                          "huber", "#Train models", "num_params"]]
     plot_models_percentage_hist(evals, eval="are", index="#Train models", columns="num_params", fig_dir=fig_dir,
+                                min_rows=1, show=show)
+    plot_models_percentage_hist(evals, eval="huber", index="#Train models", columns="num_params", fig_dir=fig_dir,
                                 min_rows=1, show=show)
 
 
