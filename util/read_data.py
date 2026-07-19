@@ -211,7 +211,7 @@ def get_t5():
         elif "xl" in name:
             return 2849804288
 
-    df = pd.read_csv("aggregated_eval/T5_pile.csv")
+    df = pd.read_csv("aggregated_eval/t5_pile.csv")
     df["checkpoint"] = df.apply(
         lambda row: hf_checkpoint(f"EleutherAI/pile-t5-{row['model_name']}", f"step_{row['steps']}"), axis=1)
     df["loss_cols"] = [["val_perplexity"]] * \
@@ -538,7 +538,7 @@ def get_llm360():
     test_df(df, DATA_AWARE_DF_COLS + ARCH_AWARE_DF_COLS)
     dfs.append(df)
 
-    df = pd.read_csv("aggregated_eval/k2.csv", index_col="index")
+    df = pd.read_csv("aggregated_eval/K2.csv", index_col="index")
     min_max_cols = [col for col in df.columns if col.endswith(
         "_MIN") or col.endswith("_MAX")]
     spike_cols = [col for col in df.columns if
